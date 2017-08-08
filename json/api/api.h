@@ -3,7 +3,7 @@
 //
 // JSON API definitions.
 //
-// Copyright Kristian Garnét.
+// Copyright Kristian GarnÃ©t.
 // -----------------------------------------------------------------------------
 
 #ifndef H_78FDB10E15634F4988C7B3C164508CED

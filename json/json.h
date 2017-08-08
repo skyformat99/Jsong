@@ -3,7 +3,7 @@
 //
 // RFC 7159 JSON parser.
 //
-// Copyright Kristian Garn?.
+// Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
 
 #ifndef H_D226490539444F71BCE58F714CBA6173

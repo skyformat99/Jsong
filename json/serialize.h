@@ -3,7 +3,7 @@
 //
 // JSON serialization definitions.
 //
-// Copyright Kristian Garn?.
+// Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
 
 #ifndef H_9DC0B808D0C647E9A9E4F3074B317BDF
