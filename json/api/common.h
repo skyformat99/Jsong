@@ -138,7 +138,7 @@ typedef struct json_num_str_s
 // Number type
 typedef enum json_num_type_e
 {
-  json_num_err,
+  json_num_special,
   json_num_flt,
   json_num_int,
   json_num_uint
@@ -146,49 +146,78 @@ typedef enum json_num_type_e
 
 // -----------------------------------------------------------------------------
 // Number kind
-typedef enum json_num_kind_e
-{
-  // High magnitude number
-  json_num_big = 0 << 2,
-  // Number parsed as string
-  json_num_str = 1 << 2
-} json_num_kind_t;
-
-// -----------------------------------------------------------------------------
-// Number error flags
-// -----------------------------------------------------------------------------
-
-typedef enum json_num_err_kind_e
-{
-  json_num_err_oflow = 0 << 3,
-  json_num_err_uflow = 1 << 3
-} json_num_err_kind_t;
-
 // -----------------------------------------------------------------------------
 
 enum
 {
-  json_num_err_sign_bit = 4
+  json_num_type_bit = 0,
+  json_num_kind_bit = 2
 };
 
-typedef enum json_num_err_sign_e
+typedef enum json_num_kind_e
 {
-  json_num_err_pos = 0 << json_num_err_sign_bit,
-  json_num_err_neg = 1 << json_num_err_sign_bit
-} json_num_err_sign_t;
+  // High magnitude number
+  json_num_big = 0 << json_num_kind_bit,
+  // Number parsed as string
+  json_num_str = 1 << json_num_kind_bit
+} json_num_kind_t;
+
+// -----------------------------------------------------------------------------
+// Special Number kind
+// -----------------------------------------------------------------------------
+
+enum
+{
+  json_num_special_kind_bit = 3
+};
+
+typedef enum json_num_special_kind_e
+{
+  // Range error
+  json_num_err = 0 << json_num_special_kind_bit,
+  // Infinity and zero (distinguished from the above as not an error)
+  json_num_inf = 1 << json_num_special_kind_bit,
+  json_num_zero = json_num_inf,
+  // NaN (not a number)
+  json_num_nan = 2 << json_num_special_kind_bit
+} json_num_special_kind_t;
+
+// -----------------------------------------------------------------------------
+// Special number flags
+// -----------------------------------------------------------------------------
+
+enum
+{
+  json_num_special_sign_bit = 8,
+  json_num_special_range_bit = 9
+};
+
+typedef enum json_num_special_sign_e
+{
+  json_num_special_pos = 0 << json_num_special_sign_bit,
+  json_num_special_neg = 1 << json_num_special_sign_bit
+} json_num_special_sign_t;
+
+typedef enum json_num_special_range_e
+{
+  json_num_special_oflow = 0 << json_num_special_range_bit,
+  json_num_special_uflow = 1 << json_num_special_range_bit
+} json_num_special_range_t;
 
 // -----------------------------------------------------------------------------
 // Metadata bits
 enum
 {
   // Number type bits
-  json_num_type = 3u << 0,
+  json_num_type = 3u << json_num_type_bit,
   // Number kind bit
-  json_num_kind = 1u << 2,
-  // Number error kind bit
-  json_num_err_kind = 1u << 3,
-  // Number error sign bit
-  json_num_err_sign = 1u << json_num_err_sign_bit
+  json_num_kind = 1u << json_num_kind_bit,
+  // Special number kind bits
+  json_num_special_kind = 31u << json_num_special_kind_bit,
+  // Special number sign bit
+  json_num_special_sign = 1u << json_num_special_sign_bit,
+  // Special number range
+  json_num_special_range = 1u << json_num_special_range_bit
 };
 
 // -----------------------------------------------------------------------------
@@ -219,13 +248,9 @@ typedef enum json_state_e
 enum
 {
   json_flags_coll_bit = 0,
+  json_flags_empty_bit = 2,
   json_flags_key_bit = 3,
   json_flags_last_bit = 4
-};
-
-enum
-{
-  json_flags_coll = 3u << json_flags_coll_bit
 };
 
 typedef enum json_flags_e
@@ -235,13 +260,20 @@ typedef enum json_flags_e
   json_flag_arr = 1 << json_flags_coll_bit,
   json_flag_root = 2 << json_flags_coll_bit,
   // Whether the current collection is empty
-  json_flag_empty = 1 << 2,
+  json_flag_empty = 1 << json_flags_empty_bit,
   // Whether the current string is an object property key or a value
   json_flag_key = 1 << json_flags_key_bit,
   json_flag_val = 0 << json_flags_key_bit,
   // Whether the current JSON chunk is the last one in a stream
   json_flag_last = 1 << json_flags_last_bit
 } json_flags_t;
+
+// -----------------------------------------------------------------------------
+// Metadata bits
+enum
+{
+  json_flags_coll = 3u << json_flags_coll_bit
+};
 
 // -----------------------------------------------------------------------------
 // Value state
@@ -288,7 +320,19 @@ typedef struct json_num_st_s
 #endif
 
 // -----------------------------------------------------------------------------
-// Parser flags management
+// Extended number type
+// -----------------------------------------------------------------------------
+
+#define json_is_num_tag_str(tag) (((tag) & json_num_kind) == json_num_str)
+#define json_is_num_tag_big(tag) (((tag) & json_num_kind) == json_num_big)
+#define json_is_num_tag_big_flt(tag) (((tag) & (json_num_type | json_num_kind)) == (json_num_flt | json_num_big))
+#define json_is_num_tag_big_int_any(tag) (((tag) & (json_num_int | json_num_big)) == (json_num_int | json_num_big))
+#define json_is_num_tag_big_int(tag) (((tag) & (json_num_type | json_num_kind)) == (json_num_int | json_num_big))
+#define json_is_num_tag_big_uint(tag) (((tag) & (json_num_type | json_num_kind)) == (json_num_uint | json_num_big))
+#define json_is_num_tag_special(tag) (((tag) & json_num_type) == json_num_special)
+
+// -----------------------------------------------------------------------------
+// Parser flags
 // -----------------------------------------------------------------------------
 
 #define json_flags_root(flags) (((flags) & json_flag_root) != 0)
@@ -304,7 +348,7 @@ typedef struct json_num_st_s
 #define json_flags_last(flags) (((flags) & json_flag_last) != 0)
 
 // -----------------------------------------------------------------------------
-// Erroneous condition management
+// Error condition
 // -----------------------------------------------------------------------------
 
 #define json_error_internal(jsnp) ((jsnp)->err <= JSON_ERROR_DEPTH)
