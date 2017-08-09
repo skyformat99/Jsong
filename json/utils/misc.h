@@ -19,14 +19,11 @@
 
 static const u8 json_str_tbl[256] =
 {
-  REPEAT16 (0), // 0
-  REPEAT16 (0), // 16
+  REPEAT16 (0), REPEAT16 (0), // 0
   1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 32
-  REPEAT16 (1), // 48
-  REPEAT16 (1), // 64
+  REPEAT16 (1), REPEAT16 (1), // 48
   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, // 80
-  REPEAT16 (1), // 96
-  REPEAT16 (1), // 112
+  REPEAT16 (1), REPEAT16 (1), // 96
   REPEAT64 (1), REPEAT64 (1) // 128
 };
 
@@ -61,19 +58,20 @@ static const u8 json_unescape_tbl[256] =
 // String escaping
 // -----------------------------------------------------------------------------
 
-static const ul32 json_escape_tbl[16] =
+static const u8 json_escape_tbl[256] =
 {
-  0xFAEAFFFFu, 0xFFFFFFFFu, // 0
-  0x00003010u, 0x33000000u, // 32
-  0x00000000u, 0x01000000u, // 64
-  0x00000000u, 0xC0000000u, // 96
-  0x00000000u, 0x00000000u, // 128
-  0x00000000u, 0x00000000u, // 160
-  0x00000000u, 0x00000000u, // 192
-  0x00000000u, 0x00000000u  // 224
+  3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 3, 2, 2, 3, 3, // 0
+  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, // 16
+  0, 0, 1, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 1, // 32
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 3, 0, // 48
+  REPEAT16 (0),                                   // 64
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, // 80
+  REPEAT16 (0),                                   // 96
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, // 112
+  REPEAT64 (0), REPEAT64 (0)                      // 128
 };
 
-#define json_chr_escape(c) ((json_escape_tbl[(c) / (INT_BIT / 2u)] >> (((c) % (INT_BIT / 2u)) * 2u)) & 3u)
+#define json_chr_escape(c) json_escape_tbl[c]
 
 // -----------------------------------------------------------------------------
 // Object property key hashing
@@ -121,7 +119,7 @@ static inline void json_str_fill (u8* buf, size_t size, char_t chr)
 
 // -----------------------------------------------------------------------------
 
-static inline bint json_str_equal (const u8* buf1, const u8* buf2, size_t size)
+static inline bool json_str_equal (const u8* buf1, const u8* buf2, size_t size)
 {
   #define T_EQUALITY
 

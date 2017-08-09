@@ -12,7 +12,7 @@ if (true)
 
   uf32 e = json_chr_escape (c);
 
-  if (likely (e == 1u))
+  if (unlikely (e == 1u))
   {
 #if JSON(ESCAPE_SIZE)
     size += 2u;
