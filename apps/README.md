@@ -3,10 +3,13 @@
 Date: **31.07.2017**
 
 OS: **Windows 10 (1703)** 64-bit
+
 Compiler: **gcc 6.3.0** (x86_64-win32-seh-rev1, Built by MinGW-W64 project)
+
 CPU: **Intel Core i5-2400**
 
 Jsong: **1.0 RC**
+
 RapidJSON: **1.1**
 
 * * *
