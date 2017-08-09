@@ -1,7 +1,7 @@
 // =============================================================================
 // JSON Escaper
 //
-// Escape JSON string passed in standard input.
+// Escape a JSON string from the standard input to the standard output.
 //
 // Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
@@ -49,7 +49,7 @@ int main (int argc, char** argv)
   u8 in[BUF_SIZE];
   u8 out[BUF_SIZE];
 
-  bint eof = false;
+  bool eof = false;
 
   size_t off = 0;
   size_t insz = fread (in, 1u, 3u, stdin);

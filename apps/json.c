@@ -67,7 +67,7 @@ int main (int argc, char** argv)
   json_uncommenti (json);
 
   // Create the memory pool
-  bint err = false;
+  bool err = false;
 
   mem_pool_t* pool = json_pool_create();
 
@@ -136,7 +136,7 @@ int main (int argc, char** argv)
 
       while (true)
       {
-        bint ret;
+        bool ret;
 
         if (stri_equal (query, "format")) ret = json_format (&st);
         else ret = json_serialize ((json_serialize_t*)&st);
@@ -179,39 +179,39 @@ int main (int argc, char** argv)
 
     switch (type)
     {
-      case json_type_obj:
+      case json_val_obj:
       {
         puts ("Object");
         break;
       }
-      case json_type_arr:
+      case json_val_arr:
       {
         puts ("Array");
         break;
       }
-      case json_type_str:
+      case json_val_str:
       {
         json_str_t str = json_get_str (elmnt);
         printf ("String: %.*s\n", str.len, str.buf);
 
         break;
       }
-      case json_type_int:
+      case json_val_int:
       {
         printf ("Number: %" PRIiMAX "\n", json_get_int (elmnt));
         break;
       }
-      case json_type_uint:
+      case json_val_uint:
       {
         printf ("Number: %" PRIuMAX "\n", json_get_uint (elmnt));
         break;
       }
-      case json_type_flt:
+      case json_val_flt:
       {
         printf ("Number: %.16g\n", json_get_flt (elmnt));
         break;
       }
-      case json_type_primitive:
+      case json_val_tok:
       {
         if (json_is_bool (elmnt))
         {
@@ -222,7 +222,7 @@ int main (int argc, char** argv)
 
         break;
       }
-      case json_type_num:
+      case json_val_num:
       {
         if (json_is_num_str (elmnt))
         {
@@ -266,7 +266,7 @@ int main (int argc, char** argv)
   #endif
         }
 #endif
-        else if (json_is_num_err (elmnt))
+        else if (json_is_num_special (elmnt))
         {
           printf ("Number range error [%X]\n", elmnt->val.tag);
         }

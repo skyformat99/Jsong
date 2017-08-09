@@ -47,7 +47,7 @@
 // -----------------------------------------------------------------------------
 // Read the JSON data from file and get its size.
 // Optionally, null-terminate the read buffer.
-static u8* readjson (const u8* fname, size_t* out, bint zero)
+static u8* readjson (const u8* fname, size_t* out, bool zero)
 {
   u8* json;
 
@@ -74,7 +74,7 @@ static u8* readjson (const u8* fname, size_t* out, bint zero)
 // DOM API benchmarks
 // -----------------------------------------------------------------------------
 
-static bint dombenchz (const u8* fname)
+static bool dombenchz (const u8* fname)
 {
   size_t size;
   u8* json = readjson (fname, &size, true);
@@ -114,7 +114,7 @@ static bint dombenchz (const u8* fname)
 
 // -----------------------------------------------------------------------------
 
-static bint dombenchb (const u8* fname)
+static bool dombenchb (const u8* fname)
 {
   size_t size;
   u8* json = readjson (fname, &size, false);
@@ -154,7 +154,7 @@ static bint dombenchb (const u8* fname)
 
 // -----------------------------------------------------------------------------
 
-static bint dombenchs (const u8* fname)
+static bool dombenchs (const u8* fname)
 {
   size_t size;
   u8* json = readjson (fname, &size, false);
@@ -196,7 +196,7 @@ static bint dombenchs (const u8* fname)
 // SAX API benchmarks
 // -----------------------------------------------------------------------------
 
-static bint saxbenchz (const u8* fname)
+static bool saxbenchz (const u8* fname)
 {
   u8 tmp[SAX_BUF_SIZE];
 
@@ -207,11 +207,11 @@ static bint saxbenchz (const u8* fname)
 
   jsax_t jsnp;
   jsax_initi (&jsnp, tmp, numof (tmp));
-  jsax_verify (&jsnp);
+  jsax_skip_all (&jsnp);
 
   bench_start();
 
-  bint rc = jsax_parsei (&jsnp, json);
+  bool rc = jsax_parsei (&jsnp, json);
 
   if (rc)
   {
@@ -230,7 +230,7 @@ static bint saxbenchz (const u8* fname)
 
 // -----------------------------------------------------------------------------
 
-static bint saxbenchb (const u8* fname)
+static bool saxbenchb (const u8* fname)
 {
   u8 tmp[SAX_BUF_SIZE];
 
@@ -241,11 +241,11 @@ static bint saxbenchb (const u8* fname)
 
   jsax_t jsnp;
   jsax_initi (&jsnp, tmp, numof (tmp));
-  jsax_verify (&jsnp);
+  jsax_skip_all (&jsnp);
 
   bench_start();
 
-  bint rc = jsax_parse (&jsnp, json, size);
+  bool rc = jsax_parse (&jsnp, json, size);
 
   if (rc)
   {
@@ -264,7 +264,7 @@ static bint saxbenchb (const u8* fname)
 
 // -----------------------------------------------------------------------------
 
-static bint saxbenchs (const u8* fname)
+static bool saxbenchs (const u8* fname)
 {
   u8 tmp[SAX_BUF_SIZE];
 
@@ -275,11 +275,11 @@ static bint saxbenchs (const u8* fname)
 
   jsax_t jsnp;
   jsax_init_stream (&jsnp, tmp, numof (tmp));
-  jsax_verify (&jsnp);
+  jsax_skip_all (&jsnp);
 
   bench_start();
 
-  bint rc = jsax_parse_stream (&jsnp, json, size, true);
+  bool rc = jsax_parse_stream (&jsnp, json, size, true);
 
   if (rc)
   {

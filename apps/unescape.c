@@ -1,7 +1,7 @@
 // =============================================================================
 // JSON Unescaper
 //
-// Unescape JSON string passed in standard input.
+// Unescape a JSON string from the standard input to the standard output.
 //
 // Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
@@ -48,7 +48,7 @@ int main (int argc, char** argv)
 #endif
 
   u8 buf[BUF_SIZE];
-  bint eof = false;
+  bool eof = false;
 
   size_t off = 0;
   size_t bufsz = fread (buf, 1u, 3u, stdin);

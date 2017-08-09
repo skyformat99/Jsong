@@ -78,6 +78,15 @@ typedef struct json_fmt_s
   jsax_format_t pretty;
 } json_fmt_t;
 
+// =============================================================================
+// Globals
+// -----------------------------------------------------------------------------
+
+static u8 buf_in[IN_BUF_SIZE];
+static u8 buf_out[OUT_BUF_SIZE];
+
+// =============================================================================
+// Macros
 // -----------------------------------------------------------------------------
 
 #define flush(kind, fn) do\
@@ -93,28 +102,23 @@ typedef struct json_fmt_s
   }       \
 } while (0)
 
-// -----------------------------------------------------------------------------
-
-static u8 buf_in[IN_BUF_SIZE];
-static u8 buf_out[OUT_BUF_SIZE];
-
 // =============================================================================
 // Functions
 // -----------------------------------------------------------------------------
 // Pretty printing callback functions
 // -----------------------------------------------------------------------------
 
-static bint pretty_on_start (jsax_t* jsnp, bool obj);
-static bint pretty_on_key (jsax_t* jsnp, jsax_key_t key);
-static bint pretty_on_str (jsax_t* jsnp, jsax_str_t str);
-static bint pretty_on_num (jsax_t* jsnp, jsax_num_t val);
-static bint pretty_on_bool (jsax_t* jsnp, bool val);
-static bint pretty_on_null (jsax_t* jsnp);
-static bint pretty_on_end (jsax_t* jsnp);
+static bool pretty_on_start (jsax_t* jsnp, bool obj);
+static bool pretty_on_key (jsax_t* jsnp, jsax_key_t key);
+static bool pretty_on_str (jsax_t* jsnp, jsax_str_t str);
+static bool pretty_on_num (jsax_t* jsnp, jsax_num_t num);
+static bool pretty_on_bool (jsax_t* jsnp, bool val);
+static bool pretty_on_null (jsax_t* jsnp);
+static bool pretty_on_end (jsax_t* jsnp);
 
 // -----------------------------------------------------------------------------
 
-static bint pretty_on_start (jsax_t* jsnp, bool obj)
+static bool pretty_on_start (jsax_t* jsnp, bool obj)
 {
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
@@ -126,7 +130,7 @@ retry:;
   return true;
 }
 
-static bint pretty_on_key (jsax_t* jsnp, jsax_key_t key)
+static bool pretty_on_key (jsax_t* jsnp, jsax_key_t key)
 {
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
@@ -139,7 +143,7 @@ retry:;
   return true;
 }
 
-static bint pretty_on_str (jsax_t* jsnp, jsax_str_t str)
+static bool pretty_on_str (jsax_t* jsnp, jsax_str_t str)
 {
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
@@ -151,21 +155,21 @@ retry:;
   return true;
 }
 
-static bint pretty_on_num (jsax_t* jsnp, jsax_num_t val)
+static bool pretty_on_num (jsax_t* jsnp, jsax_num_t num)
 {
-  if (!jsax_is_num_str (val)) return false;
+  if (!jsax_is_num_str (num)) return false;
 
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
 retry:;
-  int ret = jsax_pretty_num (&(fmt->pretty), val);
+  int ret = jsax_pretty_num (&(fmt->pretty), num);
 
   flush (pretty, jsax_format_init_buf);
 
   return true;
 }
 
-static bint pretty_on_bool (jsax_t* jsnp, bool val)
+static bool pretty_on_bool (jsax_t* jsnp, bool val)
 {
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
@@ -177,7 +181,7 @@ retry:;
   return true;
 }
 
-static bint pretty_on_null (jsax_t* jsnp)
+static bool pretty_on_null (jsax_t* jsnp)
 {
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
@@ -189,7 +193,7 @@ retry:;
   return true;
 }
 
-static bint pretty_on_end (jsax_t* jsnp)
+static bool pretty_on_end (jsax_t* jsnp)
 {
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
@@ -205,17 +209,17 @@ retry:;
 // Minifying callback functions
 // -----------------------------------------------------------------------------
 
-static bint mini_on_start (jsax_t* jsnp, bool obj);
-static bint mini_on_key (jsax_t* jsnp, jsax_key_t key);
-static bint mini_on_str (jsax_t* jsnp, jsax_str_t str);
-static bint mini_on_num (jsax_t* jsnp, jsax_num_t val);
-static bint mini_on_bool (jsax_t* jsnp, bool val);
-static bint mini_on_null (jsax_t* jsnp);
-static bint mini_on_end (jsax_t* jsnp);
+static bool mini_on_start (jsax_t* jsnp, bool obj);
+static bool mini_on_key (jsax_t* jsnp, jsax_key_t key);
+static bool mini_on_str (jsax_t* jsnp, jsax_str_t str);
+static bool mini_on_num (jsax_t* jsnp, jsax_num_t num);
+static bool mini_on_bool (jsax_t* jsnp, bool val);
+static bool mini_on_null (jsax_t* jsnp);
+static bool mini_on_end (jsax_t* jsnp);
 
 // -----------------------------------------------------------------------------
 
-static bint mini_on_start (jsax_t* jsnp, bool obj)
+static bool mini_on_start (jsax_t* jsnp, bool obj)
 {
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
@@ -227,7 +231,7 @@ retry:;
   return true;
 }
 
-static bint mini_on_key (jsax_t* jsnp, jsax_key_t key)
+static bool mini_on_key (jsax_t* jsnp, jsax_key_t key)
 {
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
@@ -240,7 +244,7 @@ retry:;
   return true;
 }
 
-static bint mini_on_str (jsax_t* jsnp, jsax_str_t str)
+static bool mini_on_str (jsax_t* jsnp, jsax_str_t str)
 {
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
@@ -252,21 +256,21 @@ retry:;
   return true;
 }
 
-static bint mini_on_num (jsax_t* jsnp, jsax_num_t val)
+static bool mini_on_num (jsax_t* jsnp, jsax_num_t num)
 {
-  if (!jsax_is_num_str (val)) return false;
+  if (!jsax_is_num_str (num)) return false;
 
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
 retry:;
-  int ret = jsax_write_num (&(fmt->mini), val);
+  int ret = jsax_write_num (&(fmt->mini), num);
 
   flush (mini, jsax_serialize_init_buf);
 
   return true;
 }
 
-static bint mini_on_bool (jsax_t* jsnp, bool val)
+static bool mini_on_bool (jsax_t* jsnp, bool val)
 {
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
@@ -278,7 +282,7 @@ retry:;
   return true;
 }
 
-static bint mini_on_null (jsax_t* jsnp)
+static bool mini_on_null (jsax_t* jsnp)
 {
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
@@ -290,7 +294,7 @@ retry:;
   return true;
 }
 
-static bint mini_on_end (jsax_t* jsnp)
+static bool mini_on_end (jsax_t* jsnp)
 {
   json_fmt_t* fmt = (json_fmt_t*)jsnp;
 
@@ -314,7 +318,7 @@ usage:
     return EXIT_FAILURE;
   }
 
-  bint mini = false;
+  bool mini = false;
 
   if (argc == 2)
   {
