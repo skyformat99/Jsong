@@ -25,11 +25,11 @@ if (true)
 #endif
 
 #if JSON(BIG_NUMBERS)
-  if (jsax_is_num_big (val))
+  if (jsax_is_num_big (num))
   {
     size_t l;
 
-    if (jsax_is_num_big_int (val))
+    if (jsax_is_num_big_int (num))
     {
       if (size < (key_space + 1u + INT128_DIG))
       {
@@ -43,9 +43,9 @@ if (true)
       size -= json_flags_obj (flags);
   #endif
 
-      l = int_s128_to_str (buf, val.num.big->i);
+      l = int_s128_to_str (buf, num.val.big->i);
     }
-    else if (jsax_is_num_big_uint (val))
+    else if (jsax_is_num_big_uint (num))
     {
       if (size < (key_space + UINT128_DIG))
       {
@@ -59,23 +59,23 @@ if (true)
       size -= json_flags_obj (flags);
   #endif
 
-      l = int_u128_to_str (buf, val.num.big->u);
+      l = int_u128_to_str (buf, num.val.big->u);
     }
-    else if (jsax_is_num_big_flt (val))
+    else if (jsax_is_num_big_flt (num))
     {
       u8 temp[JSON_BIG_FLT_BUF_SIZE];
 
   #ifdef FLT128_MAX
       l = quadmath_snprintf (temp, numof (temp), "%.*Qg"
-      , (uint)(st->big_flt_dig), val.num.big->f);
+      , (uint)(st->big_flt_dig), num.val.big->f);
   #else
     #if (LDBL_BINARY == 80)
       #if OS(WIN32)
         l = __mingw_snprintf (temp, numof (temp), "%.*Lg"
-        , (uint)(st->big_flt_dig), val.num.big->f);
+        , (uint)(st->big_flt_dig), num.val.big->f);
       #else
         l = snprintf (temp, numof (temp), "%.*Lg"
-        , (uint)(st->big_flt_dig), val.num.big->f);
+        , (uint)(st->big_flt_dig), num.val.big->f);
       #endif
     #endif
   #endif
@@ -100,11 +100,11 @@ if (true)
   }
   else
 #endif
-  if (jsax_is_num_str (val))
+  if (jsax_is_num_str (num))
   {
-    if (size < (key_space + val.num.str->meta.len_number))
+    if (size < (key_space + num.val.str->meta.len_number))
     {
-      st->need = (key_space + val.num.str->meta.len_number) - size;
+      st->need = (key_space + num.val.str->meta.len_number) - size;
       return 1;
     }
 
@@ -114,10 +114,10 @@ if (true)
     size -= json_flags_obj (flags);
 #endif
 
-    json_str_copy (buf, val.num.str->buf, val.num.str->meta.len_number);
+    json_str_copy (buf, num.val.str->buf, num.val.str->meta.len_number);
 
-    buf += val.num.str->meta.len_number;
-    size -= val.num.str->meta.len_number;
+    buf += num.val.str->meta.len_number;
+    size -= num.val.str->meta.len_number;
   }
 
   st->flags = (flags & json_flag_arr)

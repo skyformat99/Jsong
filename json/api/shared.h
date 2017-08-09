@@ -93,7 +93,7 @@
 
   // Position in the input buffer
   size_t pos;
-  // Bytes needed to complete the sequence
+  // Bytes needed to complete the current JSON sequence
   size_t need;
 };
 
@@ -102,7 +102,8 @@
 // -----------------------------------------------------------------------------
 
 #if H(A3263E8F162D478FAB413A8B50F7E7F2)
-  #define jsax_parser(obj) (jsax_t*)(obj)
+  // Access the SAX parser structure embedded in other object
+  #define jsax_cast(obj) (jsax_t*)(obj)
 
   #define jsax_key_len(key) (json_hash_len (key.hash))
 #else

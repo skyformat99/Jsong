@@ -31,38 +31,38 @@
 #if JSON(BIG_NUMBERS)
 #define json_num_big_int_evnt(a) do\
 {                                  \
-  jsax_num_t val;                  \
+  jsax_num_t num;                  \
   json_num_big_t big;              \
                                    \
   big.i = (a);                     \
-  val.num.big = &big;              \
-  val.tag = json_num_int | json_num_big;\
+  num.val.big = &big;              \
+  num.tag = json_num_int | json_num_big;\
                                    \
-  jsax_callback (jsnp->on_num, jsnp, val);\
+  jsax_callback (jsnp->on_num, jsnp, num);\
 } while (0)
 
 #define json_num_big_uint_evnt(a) do\
 {                                   \
-  jsax_num_t val;                   \
+  jsax_num_t num;                   \
   json_num_big_t big;               \
                                     \
   big.u = (a);                      \
-  val.num.big = &big;               \
-  val.tag = json_num_uint | json_num_big;\
+  num.val.big = &big;               \
+  num.tag = json_num_uint | json_num_big;\
                                     \
-  jsax_callback (jsnp->on_num, jsnp, val);\
+  jsax_callback (jsnp->on_num, jsnp, num);\
 } while (0)
 
 #define json_num_big_flt_evnt(a) do\
 {                                  \
-  jsax_num_t val;                  \
+  jsax_num_t num;                  \
   json_num_big_t big;              \
                                    \
   big.f = (a);                     \
-  val.num.big = &big;              \
-  val.tag = json_num_flt | json_num_big;\
+  num.val.big = &big;              \
+  num.tag = json_num_flt | json_num_big;\
                                    \
-  jsax_callback (jsnp->on_num, jsnp, val);\
+  jsax_callback (jsnp->on_num, jsnp, num);\
 } while (0)
 #endif
 
@@ -70,24 +70,24 @@
 
 #define json_num_oflow_evnt(meta) do\
 {                                   \
-  jsax_num_t val;                   \
+  jsax_num_t num;                   \
                                     \
-  val.tag = json_num_err            \
-  | json_num_err_oflow              \
-  | (meta.sign << json_num_err_sign_bit);\
+  num.tag = json_num_special        \
+  | json_num_err | json_num_special_oflow\
+  | (meta.sign << json_num_special_sign_bit);\
                                     \
-  jsax_callback (jsnp->on_num, jsnp, val);\
+  jsax_callback (jsnp->on_num, jsnp, num);\
 } while (0)
 
 #define json_num_uflow_evnt(meta) do\
 {                                   \
-  jsax_num_t val;                   \
+  jsax_num_t num;                   \
                                     \
-  val.tag = json_num_err            \
-  | json_num_err_uflow              \
-  | (meta.sign << json_num_err_sign_bit);\
+  num.tag = json_num_special        \
+  | json_num_err | json_num_special_uflow\
+  | (meta.sign << json_num_special_sign_bit);\
                                     \
-  jsax_callback (jsnp->on_num, jsnp, val);\
+  jsax_callback (jsnp->on_num, jsnp, num);\
 } while (0)
 
 // -----------------------------------------------------------------------------

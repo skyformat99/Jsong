@@ -41,15 +41,15 @@ if (true)
   meta.len_number = len;
 
   // Set the number string value
-  jsax_num_t val;
+  jsax_num_t num;
   json_num_str_t str;
 
   str.buf = buf;
   str.meta = meta;
 
-  val.num.str = &str;
-  val.tag = json_num_str;
+  num.val.str = &str;
+  num.tag = json_num_str;
 
   // Execute the number event handler
-  jsax_callback (jsnp->on_num, jsnp, val);
+  jsax_callback (jsnp->on_num, jsnp, num);
 }

@@ -225,12 +225,12 @@ int jsax_pretty_str (jsax_format_t* st, jsax_str_t str)
 
 // -----------------------------------------------------------------------------
 
-int jsax_write_num (jsax_serialize_t* st, jsax_num_t val)
+int jsax_write_num (jsax_serialize_t* st, jsax_num_t num)
 {
   #include "sax/number.c"
 }
 
-int jsax_pretty_num (jsax_format_t* st, jsax_num_t val)
+int jsax_pretty_num (jsax_format_t* st, jsax_num_t num)
 {
   #define T_PRETTY
   #define t_eol OS_EOL

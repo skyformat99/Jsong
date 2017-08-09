@@ -173,7 +173,7 @@
 } while (0)
 
 // -----------------------------------------------------------------------------
-// Initialize the parser
+// RFC 7159 JSON parser implementation
 // -----------------------------------------------------------------------------
 
 #if JSON(SAX)
@@ -226,16 +226,14 @@ void json_initi (json_t* jsnp, mem_pool_t* pool)
 }
 
 // -----------------------------------------------------------------------------
-// Parse the input JSON data
-// -----------------------------------------------------------------------------
 
 #if JSON(SAX)
   #if JSON(STREAM)
-bint jsax_parse_stream (jsax_t* jsnp, u8* json, size_t size, bool last)
+bool jsax_parse_stream (jsax_t* jsnp, u8* json, size_t size, bool last)
   #elif JSON(EXPLICIT)
-bint jsax_parse (jsax_t* jsnp, u8* json, size_t size)
+bool jsax_parse (jsax_t* jsnp, u8* json, size_t size)
   #else
-bint jsax_parsei (jsax_t* jsnp, u8* json)
+bool jsax_parsei (jsax_t* jsnp, u8* json)
   #endif
 #else
   #if JSON(STREAM)
@@ -914,7 +912,7 @@ loop (cardinal32);
     repeat (cardinal32);
 
 cardinal32_oflow:
-    if (!int_is_oflow_dig (mi32, UINT32_MAX, d)) mi32 = (mi32 * 10u) + d;
+    if (!int_will_oflow_dig (mi32, UINT32_MAX, d)) mi32 = (mi32 * 10u) + d;
     mi = mi32;
 
     goto cardinal_continue;
@@ -968,7 +966,7 @@ loop (fraction32);
       repeat (fraction32);
 
 fraction32_oflow:
-      if (!int_is_oflow_dig (mi32, UINT32_MAX, d)) mi32 = (mi32 * 10u) + d;
+      if (!int_will_oflow_dig (mi32, UINT32_MAX, d)) mi32 = (mi32 * 10u) + d;
       mi = mi32;
 
       goto fraction_continue;
