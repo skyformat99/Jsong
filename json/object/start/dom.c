@@ -14,7 +14,7 @@ if (true)
 
   // Get the current element and set the object value
   json_elmnt_t* elmnt = jsnp->elmnt;
-  elmnt->box.tag |= json_type_obj;
+  elmnt->box.tag |= json_val_obj;
   elmnt->val.obj = obj;
 
   // Initialize the object

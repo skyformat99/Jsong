@@ -78,12 +78,12 @@ void json_format_init_buf (json_format_t* st
 
 // -----------------------------------------------------------------------------
 
-bint json_serialize (json_serialize_t* st)
+bool json_serialize (json_serialize_t* st)
 {
   #include "dom/template.c"
 }
 
-bint json_format (json_format_t* st)
+bool json_format (json_format_t* st)
 {
   #define T_PRETTY
   #define t_eol OS_EOL

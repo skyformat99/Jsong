@@ -22,7 +22,7 @@
 // Compare key strings for equality if only length is known
 #define json_key_cmp_name(a_kv, a_str, a_len) do\
 {                                               \
-  bint pack = a_kv->ukey.tag & json_str_pack;   \
+  bool pack = a_kv->ukey.tag & json_str_pack;   \
   json_ukey_t ukey = {.ptr = json_unpack (void*, a_kv->ukey)};\
                                                 \
   if (unlikely (json_key_len (ukey.ikey) == a_len))\
@@ -40,7 +40,7 @@
 // Compare key strings for equality if hash is known
 #define json_key_cmp_hash(a_kv, a_str, a_hash) do\
 {                                                \
-  bint pack = a_kv->ukey.tag & json_str_pack;    \
+  bool pack = a_kv->ukey.tag & json_str_pack;    \
   json_ukey_t ukey = {.ptr = json_unpack (void*, a_kv->ukey)};\
                                                  \
   if (unlikely (ukey.ikey->hash == a_hash))      \
@@ -56,7 +56,7 @@
 
 // -----------------------------------------------------------------------------
 // Lookup object property by name
-inline json_kv_t* json_kv_find_name (const json_kv_t* kv, const u8* str, uint len)
+inline json_kv_t* json_kv_find (const json_kv_t* kv, const u8* str, uint len)
 {
   while (kv != null)
   {
@@ -69,7 +69,7 @@ inline json_kv_t* json_kv_find_name (const json_kv_t* kv, const u8* str, uint le
 
 // -----------------------------------------------------------------------------
 // Lookup object property by name in reverse order (backwards)
-inline json_kv_t* json_kv_rfind_name (const json_kv_t* kv, const u8* str, uint len)
+inline json_kv_t* json_kv_rfind (const json_kv_t* kv, const u8* str, uint len)
 {
   json_kv_t* prev;
 
@@ -94,7 +94,11 @@ inline json_kv_t* json_kv_rfind_name (const json_kv_t* kv, const u8* str, uint l
 }
 
 // -----------------------------------------------------------------------------
-// Same as above, except do lookup using the provided key hash value
+
+#if JSON(HASH_KEYS)
+
+// -----------------------------------------------------------------------------
+// Same as above, except do the lookup using the provided key hash value
 inline json_kv_t* json_kv_find_hash (const json_kv_t* kv, const u8* str, uint hash)
 {
   uint len = json_hash_len (hash);
@@ -109,7 +113,7 @@ inline json_kv_t* json_kv_find_hash (const json_kv_t* kv, const u8* str, uint ha
 }
 
 // -----------------------------------------------------------------------------
-// Same as above, except backwards
+// Same as above, but backwards
 inline json_kv_t* json_kv_rfind_hash (const json_kv_t* kv, const u8* str, uint hash)
 {
   json_kv_t* prev;
@@ -132,13 +136,17 @@ inline json_kv_t* json_kv_rfind_hash (const json_kv_t* kv, const u8* str, uint h
 
 // -----------------------------------------------------------------------------
 
+#endif // JSON(HASH_KEYS)
+
+// -----------------------------------------------------------------------------
+
 #undef json_key_cmp_name
 #undef json_key_cmp_hash
 
 // -----------------------------------------------------------------------------
-// RFC6901 JSON pointer implementation
+// RFC 6901 JSON Pointer implementation
 // -----------------------------------------------------------------------------
-// Parse the JSON pointer string. It cannot be null-terminated,
+// Parse the JSON Pointer string. It cannot be null-terminated,
 // so its length must be provided explicitly by the caller.
 uint json_parse_pointer (const u8* str, uint len, u8* buf, json_key_t* keys, uint max)
 {
@@ -167,7 +175,7 @@ uint json_parse_pointer (const u8* str, uint len, u8* buf, json_key_t* keys, uin
     {
       c = *s++;
 
-      // JSON pointer character sequence parsing template
+      // JSON Pointer character sequence parsing template
       #define json_parse_pointer_seq(u)\
       /* Next pointer element start */ \
       if (unlikely (c == '/'))         \
@@ -243,7 +251,7 @@ uint json_parse_pointer (const u8* str, uint len, u8* buf, json_key_t* keys, uin
 }
 
 // -----------------------------------------------------------------------------
-// Query the DOM tree using the parsed JSON pointer
+// Query the DOM tree using the parsed JSON Pointer
 json_node_t json_pointer (json_node_t node, const json_key_t* keys, uint num)
 {
   // Number of elements to traverse
@@ -262,10 +270,15 @@ json_node_t json_pointer (json_node_t node, const json_key_t* keys, uint num)
     json_type_t type = json_get_type (elmnt);
 
     // Lookup the property by hash if it's an object
-    if (likely (type == json_type_obj))
+    if (likely (type == json_val_obj))
     {
+#if JSON(HASH_KEYS)
       elmnt = (json_elmnt_t*)json_kv_find_hash (elmnt->val.obj->first
       , keys->buf, keys->hash);
+#else
+      elmnt = (json_elmnt_t*)json_kv_find (elmnt->val.obj->first
+      , keys->buf, keys->hash);
+#endif
 
       if (unlikely (elmnt == null)) return json_node_null;
 
@@ -273,20 +286,20 @@ json_node_t json_pointer (json_node_t node, const json_key_t* keys, uint num)
     }
 
     // Lookup the array item by its index
-    else if (likely (type == json_type_arr))
+    else if (likely (type == json_val_arr))
     {
-      int_parse_t ip;
+      int_parse_t parse;
 
-      uint idx = int_uint_parse (keys->buf, json_key_len (keys), &ip);
+      uint idx = int_uint_parse (keys->buf, json_key_len (keys), &parse);
 
-      if (unlikely (ip.err != int_parse_ok))
+      if (unlikely (parse.err != int_parse_ok))
       {
         // `-` reference (next item after the last array element)
         // is not handled
         return json_node_null;
       }
 
-      elmnt = (json_elmnt_t*)json_arr_idx (elmnt->val.arr, idx);
+      elmnt = (json_elmnt_t*)json_arr_get (elmnt->val.arr, idx);
 
       if (unlikely (elmnt == null)) return json_node_null;
 
@@ -308,8 +321,8 @@ json_node_t json_pointer (json_node_t node, const json_key_t* keys, uint num)
 }
 
 // -----------------------------------------------------------------------------
-// Query the DOM tree using the simple JSON query syntax.
-// JSON query doesn't require any pre-parsing to use it.
+// Query the DOM tree using the simple JSON Query syntax.
+// JSON Query doesn't require any pre-parsing to use it.
 json_node_t json_query (json_node_t node, const u8* str, uint len)
 {
   if (unlikely (len == 0)) return node;
@@ -334,24 +347,24 @@ json_node_t json_query (json_node_t node, const u8* str, uint len)
       #define json_query_elmnt()\
       json_type_t type = json_get_type (elmnt);\
                                 \
-      if (likely (type == json_type_obj))\
+      if (likely (type == json_val_obj))\
       {                         \
-        elmnt = (json_elmnt_t*)json_kv_find_name (elmnt->val.obj->first\
+        elmnt = (json_elmnt_t*)json_kv_find (elmnt->val.obj->first\
         , p, (size_t)(s - p));  \
                                 \
         if (unlikely (elmnt == null)) return json_node_null;\
                                 \
         coll = json_coll_obj;   \
       }                         \
-      else if (likely (type == json_type_arr))\
+      else if (likely (type == json_val_arr))\
       {                         \
-        elmnt = (json_elmnt_t*)json_arr_idx (elmnt->val.arr\
+        elmnt = (json_elmnt_t*)json_arr_get (elmnt->val.arr\
         , int_uint_from_str (p, (size_t)(s - p)));\
                                 \
         if (unlikely (elmnt == null)) return json_node_null;\
-                             \
-        coll = json_coll_arr;\
-      }                   \
+                               \
+        coll = json_coll_arr;  \
+      }                        \
       else return json_node_null
 
       json_query_elmnt();
@@ -370,7 +383,7 @@ json_node_t json_query (json_node_t node, const u8* str, uint len)
 }
 
 // -----------------------------------------------------------------------------
-// DOM memory pool management
+// Factory
 // -----------------------------------------------------------------------------
 
 #if (MEM_POOL_ALIGNMENT == 0) && (INTPTR_BIT <= 64)
@@ -380,213 +393,31 @@ json_node_t json_query (json_node_t node, const u8* str, uint len)
 #include <quantum/memory/pool.c>
 
 // -----------------------------------------------------------------------------
-// Create the JSON memory pool
+
 mem_pool_t* json_pool_create (void)
 {
   return mem_pool_create (JSON_POOL_SIZE, JSON_POOL_MAX, sizeof (json_kv_t));
 }
 
-// -----------------------------------------------------------------------------
-// Destroy the JSON memory pool
 void json_pool_destroy (mem_pool_t* pool)
 {
   mem_pool_destroy (pool);
 }
 
 // -----------------------------------------------------------------------------
-// DOM tree manipulation
-// -----------------------------------------------------------------------------
-// Array management
-// -----------------------------------------------------------------------------
 
-static inline void json_arr_init (json_arr_t* arr, json_item_t* item, uint num)
+json_elmnt_t* json_new_root (mem_pool_t* pool)
 {
-  for (uint i = 0; i < num; i++)
-  {
-    item[i].box.arr = arr;
-    item[i].val.ptr = null;
-  }
+  json_elmnt_t* elmnt = mem_pool_alloc (pool, sizeof (json_elmnt_t));
+
+  if (unlikely (elmnt == null)) return null;
+
+  elmnt->box.ptr = null;
+  elmnt->val.ptr = null;
+
+  return elmnt;
 }
 
-// -----------------------------------------------------------------------------
-
-json_item_t* json_arr_item (json_arr_t* arr, uint idx, mem_pool_t* pool)
-{
-  uint num = arr->num;
-
-  if (likely (idx < num)) return arr->items + idx;
-
-  uint size = arr->size;
-  uint isz = idx + 1u - num;
-
-  if (likely (idx < size))
-  {
-    arr->num = idx + 1u;
-    json_arr_init (arr, arr->items + num, isz);
-
-    return arr->items + idx;
-  }
-
-  uint nsz = idx + (size >> 1) + 1u;
-
-  json_item_t* items = mem_pool_realloc (pool, arr->items
-  , arr_size (items, size), arr_size (items, nsz));
-
-  if (unlikely (items == null)) return null;
-
-  json_arr_init (arr, items + num, isz);
-
-  arr->items = items;
-  arr->size = nsz;
-  arr->num = idx + 1u;
-
-  return items + idx;
-}
-
-// -----------------------------------------------------------------------------
-
-json_item_t* json_arr_add (json_arr_t* arr, uint num, mem_pool_t* pool)
-{
-  uint size = arr->size;
-  uint n = arr->num;
-
-  if (n + num <= size)
-  {
-    arr->num = n + num;
-    json_arr_init (arr, arr->items + n, num);
-
-    return arr->items + n;
-  }
-
-  uint sz = n + num + (size >> 1) + 1u;
-
-  json_item_t* items = mem_pool_realloc (pool, arr->items
-  , arr_size (items, size), arr_size (items, sz));
-
-  if (unlikely (items == null)) return null;
-
-  json_arr_init (arr, items + n, num);
-
-  arr->items = items;
-  arr->size = sz;
-  arr->num = n + num;
-
-  return items + n;
-}
-
-// -----------------------------------------------------------------------------
-
-void json_arr_remove (json_arr_t* arr, uint idx, uint num, bint move, mem_pool_t* pool)
-{
-  uint n = arr->num;
-
-  if (idx + num >= n)
-  {
-    arr->num = (idx < n) ? idx : n;
-    return;
-  }
-
-  arr->num -= num;
-
-  if (move)
-  {
-    mem_move (arr->items + idx, arr->items + idx + num
-    , arr_size (arr->items, n - (idx + num)));
-  }
-  else
-  {
-    json_arr_init (arr, arr->items + idx, num);
-  }
-}
-
-// -----------------------------------------------------------------------------
-
-bint json_arr_resize (json_arr_t* arr, uint num, bint shrink, mem_pool_t* pool)
-{
-  uint n = arr->num;
-
-  if (n < num)
-  {
-    if (shrink)
-    {
-      json_item_t* items = mem_pool_realloc (pool, arr->items
-      , arr_size (items, arr->size), arr_size (items, num));
-
-      if (unlikely (items == null)) return false;
-
-      arr->items = items;
-    }
-
-    arr->num = num;
-
-    return true;
-  }
-  else if (num > n)
-  {
-    uint size = arr->size;
-
-    if (num <= size)
-    {
-      arr->num = num;
-      json_arr_init (arr, arr->items + n, num - n);
-
-      return true;
-    }
-
-    json_item_t* items = mem_pool_realloc (pool, arr->items
-    , arr_size (items, size), arr_size (items, num));
-
-    if (unlikely (items == null)) return false;
-
-    arr->items = items;
-    arr->size = num;
-    arr->num = num;
-  }
-
-  return true;
-}
-
-// -----------------------------------------------------------------------------
-// Object management
-// -----------------------------------------------------------------------------
-
-void json_kv_add (json_kv_t* kv, json_kv_t* link, mem_pool_t* pool)
-{
-  json_kv_t* next = kv->next;
-
-  kv->next = link;
-
-  link->box.kv = kv;
-  link->next = next;
-
-  if (next != null) next->box.kv = link;
-}
-
-// -----------------------------------------------------------------------------
-
-void json_kv_remove (json_kv_t* kv, mem_pool_t* pool)
-{
-  json_kv_t* prev = json_unbox (json_kv_t*, kv->box);
-  json_kv_t* next = kv->next;
-
-  if (unlikely (prev->box.ptr == kv))
-  {
-    json_obj_t* obj = (json_obj_t*)prev;
-
-    obj->first = next;
-
-    if (next != null) next->box.obj = obj;
-
-    return;
-  }
-
-  prev->next = next;
-
-  if (next != null) next->box.kv = prev;
-}
-
-// -----------------------------------------------------------------------------
-// Allocation
 // -----------------------------------------------------------------------------
 
 json_obj_t* json_new_obj (mem_pool_t* pool)
@@ -599,6 +430,8 @@ json_obj_t* json_new_obj (mem_pool_t* pool)
 
   return obj;
 }
+
+// -----------------------------------------------------------------------------
 
 json_arr_t* json_new_arr (mem_pool_t* pool)
 {
@@ -613,17 +446,7 @@ json_arr_t* json_new_arr (mem_pool_t* pool)
   return arr;
 }
 
-json_elmnt_t* json_new_root (mem_pool_t* pool)
-{
-  json_elmnt_t* elmnt = mem_pool_alloc (pool, sizeof (json_elmnt_t));
-
-  if (unlikely (elmnt == null)) return null;
-
-  elmnt->box.ptr = null;
-  elmnt->val.ptr = null;
-
-  return elmnt;
-}
+// -----------------------------------------------------------------------------
 
 json_kv_t* json_new_kv (mem_pool_t* pool)
 {
@@ -635,6 +458,8 @@ json_kv_t* json_new_kv (mem_pool_t* pool)
 
   return kv;
 }
+
+// -----------------------------------------------------------------------------
 
 json_key_t* json_new_key (const u8* str, uint len, mem_pool_t* pool)
 {
@@ -660,6 +485,8 @@ json_ikey_t* json_new_ikey (const u8* str, uint len, mem_pool_t* pool)
   return ikey;
 }
 
+// -----------------------------------------------------------------------------
+
 json_str_t* json_new_str (const u8* buf, uint len, mem_pool_t* pool)
 {
   json_str_t* str = mem_pool_alloc (pool, sizeof (json_str_t));
@@ -683,6 +510,8 @@ json_istr_t* json_new_istr (const u8* buf, uint len, mem_pool_t* pool)
 
   return str;
 }
+
+// -----------------------------------------------------------------------------
 
 json_num_str_t* json_new_num_str (const u8* buf, uint len, mem_pool_t* pool)
 {
@@ -710,6 +539,8 @@ json_num_istr_t* json_new_num_istr (const u8* buf, uint len, mem_pool_t* pool)
   return str;
 }
 
+// -----------------------------------------------------------------------------
+
 json_num_big_t* json_new_num_big (mem_pool_t* pool)
 {
   json_num_big_t* big = mem_pool_alloc (pool, sizeof (json_num_big_t));
@@ -719,4 +550,151 @@ json_num_big_t* json_new_num_big (mem_pool_t* pool)
   obj_zero (big);
 
   return big;
+}
+
+// -----------------------------------------------------------------------------
+// DOM tree manipulation
+// -----------------------------------------------------------------------------
+// Array manipulation
+// -----------------------------------------------------------------------------
+
+json_item_t* json_arr_set (json_arr_t* arr, uint idx, mem_pool_t* pool)
+{
+  uint num = arr->num;
+
+  if (likely (idx < num)) return arr->items + idx;
+
+  uint size = arr->size;
+  uint isz = (idx + 1u) - num;
+
+  if (likely (idx < size))
+  {
+    arr->num = idx + 1u;
+    json_arr_init (arr, num, isz);
+
+    return arr->items + idx;
+  }
+
+  uint nsz = (idx + 1u) + (size >> 1);
+
+  json_item_t* items = mem_pool_realloc (pool, arr->items
+  , arr_size (items, size), arr_size (items, nsz));
+
+  if (unlikely (items == null)) return null;
+
+  arr->items = items;
+  arr->size = nsz;
+  arr->num = idx + 1u;
+
+  json_arr_init (arr, num, isz);
+
+  return items + idx;
+}
+
+// -----------------------------------------------------------------------------
+
+json_item_t* json_arr_add (json_arr_t* arr, uint num, mem_pool_t* pool)
+{
+  uint size = arr->size;
+  uint n = arr->num;
+
+  if (likely ((n + num) <= size))
+  {
+    arr->num = n + num;
+    json_arr_init (arr, n, num);
+
+    return arr->items + n;
+  }
+
+  uint nsz = (n + num) + (size >> 1);
+
+  json_item_t* items = mem_pool_realloc (pool, arr->items
+  , arr_size (items, size), arr_size (items, nsz));
+
+  if (unlikely (items == null)) return null;
+
+  arr->items = items;
+  arr->size = nsz;
+  arr->num = n + num;
+
+  json_arr_init (arr, n, num);
+
+  return items + n;
+}
+
+// -----------------------------------------------------------------------------
+
+bool json_arr_resize (json_arr_t* arr, uint num, bool soft, mem_pool_t* pool)
+{
+  uint n = arr->num;
+
+  // Shrunk
+  if (unlikely (num < n))
+  {
+    if (unlikely (!soft))
+    {
+      json_item_t* items = mem_pool_realloc (pool, arr->items
+      , arr_size (items, arr->size), arr_size (items, num));
+
+      if (unlikely (items == null)) return false;
+
+      arr->items = items;
+    }
+
+    arr->num = num;
+
+    return true;
+  }
+
+  // Grow
+  else if (likely (num > n))
+  {
+    uint size = arr->size;
+
+    if (likely (num <= size))
+    {
+      arr->num = num;
+      json_arr_init (arr, n, num - n);
+
+      return true;
+    }
+
+    json_item_t* items = mem_pool_realloc (pool, arr->items
+    , arr_size (items, size), arr_size (items, num));
+
+    if (unlikely (items == null)) return false;
+
+    arr->items = items;
+    arr->size = num;
+    arr->num = num;
+
+    json_arr_init (arr, n, num - n);
+  }
+
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+
+void json_arr_remove (json_arr_t* arr, uint idx, uint num, bool soft)
+{
+  uint n = arr->num;
+
+  if (likely ((idx + num) >= n))
+  {
+    arr->num = (idx < n) ? idx : n;
+    return;
+  }
+
+  if (likely (soft))
+  {
+    json_arr_init (arr, idx, num);
+  }
+  else
+  {
+    arr->num -= num;
+
+    mem_move (arr->items + idx, arr->items + idx + num
+    , arr_size (arr->items, n - (idx + num)));
+  }
 }

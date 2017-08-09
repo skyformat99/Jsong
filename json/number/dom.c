@@ -11,7 +11,7 @@ if (true)
   void* ptr;
 
 #if !JSON(STREAM)
-  bint pack;
+  bool pack;
 #endif
 
   // Get the number string
@@ -97,7 +97,7 @@ if (true)
 
   // Set the number type
   json_elmnt_t* elmnt = jsnp->elmnt;
-  elmnt->box.tag |= json_type_num;
+  elmnt->box.tag |= json_val_num;
 
   // Set the number string value
   elmnt->val.ptr = ptr;

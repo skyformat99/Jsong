@@ -16,7 +16,7 @@ if (true)
 
   // Get the current element and set the array value
   json_elmnt_t* elmnt = jsnp->elmnt;
-  elmnt->box.tag |= json_type_arr;
+  elmnt->box.tag |= json_val_arr;
   elmnt->val.arr = arr;
 
   // Initialize the array

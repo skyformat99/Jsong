@@ -15,8 +15,8 @@
 {                           \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                             \
-  elmnt->box.tag |= json_type_primitive;\
-  elmnt->val.tag = 2u | v;\
+  elmnt->box.tag |= json_val_tok;\
+  elmnt->val.tag = json_bool_type | v;\
 } while (0)
 
 // -----------------------------------------------------------------------------
@@ -25,8 +25,8 @@
 {                          \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                            \
-  elmnt->box.tag |= json_type_primitive;\
-  elmnt->val.tag = 1u;\
+  elmnt->box.tag |= json_val_tok;\
+  elmnt->val.tag = json_null;\
 } while (0)
 
 // -----------------------------------------------------------------------------

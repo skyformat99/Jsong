@@ -51,7 +51,7 @@ number_from_flt:
             void* ptr;
 
   #if !JSON(STREAM)
-            bint pack;
+            bool pack;
   #endif
 
 number_as_str:
@@ -168,7 +168,7 @@ number_as_str:
   #else
             // Set the number type
             json_elmnt_t* elmnt = jsnp->elmnt;
-            elmnt->box.tag |= json_type_num;
+            elmnt->box.tag |= json_val_num;
 
             // Set the number string value
             elmnt->val.ptr = ptr;
@@ -366,7 +366,7 @@ number_erange:;
       mi = int_umax_from_str (p, JSON_NUM_UINT_DIG - 1);
 
       if (likely (!int_can_oflow_dig (mi, JSON_NUM_UINT_MAX)
-      || !int_is_oflow_dig (mi, JSON_NUM_UINT_MAX, l)))
+      || !int_will_oflow_dig (mi, JSON_NUM_UINT_MAX, l)))
       {
         mi = (mi * 10u) + l;
         goto number_from_int;
@@ -503,7 +503,7 @@ number_big_flt:
           uint l = chr_dig_to_int (p[JSON_NUM_BIG_UINT_DIG - 1]);
 
           if (likely (!int_can_oflow_dig (bi, JSON_NUM_BIG_UINT_MAX)
-          || !int_is_oflow_dig (bi, JSON_NUM_BIG_UINT_MAX, l)))
+          || !int_will_oflow_dig (bi, JSON_NUM_BIG_UINT_MAX, l)))
           {
             bi = (bi * 10u) + l;
             goto number_from_big_int;
@@ -555,7 +555,7 @@ number_big_flt:
     {
       uint l = chr_dig_to_int (p[JSON_NUM_UINT_DIG - 1]);
 
-      if (likely (!int_is_oflow_dig (mi, JSON_NUM_UINT_MAX, l)))
+      if (likely (!int_will_oflow_dig (mi, JSON_NUM_UINT_MAX, l)))
       {
         mi = (mi * 10u) + l;
         goto number_from_int;

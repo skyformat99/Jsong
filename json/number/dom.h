@@ -15,7 +15,7 @@
 {                              \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                                \
-  elmnt->box.tag |= json_type_int;\
+  elmnt->box.tag |= json_val_int;\
   elmnt->val.i = (a);\
 } while (0)
 
@@ -23,7 +23,7 @@
 {                               \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                                 \
-  elmnt->box.tag |= json_type_uint;\
+  elmnt->box.tag |= json_val_uint;\
   elmnt->val.u = (a);\
 } while (0)
 
@@ -31,7 +31,7 @@
 {                              \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                                \
-  elmnt->box.tag |= json_type_flt;\
+  elmnt->box.tag |= json_val_flt;\
   elmnt->val.f = (a);\
 } while (0)
 
@@ -42,7 +42,7 @@
 {                                  \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                                    \
-  elmnt->box.tag |= json_type_num; \
+  elmnt->box.tag |= json_val_num; \
   json_val_init (elmnt, num.big);  \
                                    \
   elmnt->val.num.big->i = (a);     \
@@ -53,7 +53,7 @@
 {                                   \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                                     \
-  elmnt->box.tag |= json_type_num;  \
+  elmnt->box.tag |= json_val_num;  \
   json_val_init (elmnt, num.big);   \
                                     \
   elmnt->val.num.big->u = (a);      \
@@ -64,7 +64,7 @@
 {                                  \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                                    \
-  elmnt->box.tag |= json_type_num; \
+  elmnt->box.tag |= json_val_num; \
   json_val_init (elmnt, num.big);  \
                                    \
   elmnt->val.num.big->f = (a);     \
@@ -78,20 +78,20 @@
 {                                   \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                                     \
-  elmnt->box.tag |= json_type_num;  \
-  elmnt->val.tag = json_num_err     \
-  | json_num_err_oflow              \
-  | (meta.sign << json_num_err_sign_bit);\
+  elmnt->box.tag |= json_val_num;  \
+  elmnt->val.tag = json_num_special \
+  | json_num_err | json_num_special_oflow\
+  | (meta.sign << json_num_special_sign_bit);\
 } while (0)
 
 #define json_num_uflow_evnt(meta) do\
 {                                   \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                                     \
-  elmnt->box.tag |= json_type_num;  \
-  elmnt->val.tag = json_num_err     \
-  | json_num_err_uflow              \
-  | (meta.sign << json_num_err_sign_bit);\
+  elmnt->box.tag |= json_val_num;  \
+  elmnt->val.tag = json_num_special \
+  | json_num_err | json_num_special_uflow\
+  | (meta.sign << json_num_special_sign_bit);\
 } while (0)
 
 // -----------------------------------------------------------------------------

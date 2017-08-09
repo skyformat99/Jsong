@@ -89,7 +89,7 @@ string_value:
       // Set the string value
       json_elmnt_t* elmnt = jsnp->elmnt;
 
-      elmnt->box.tag |= json_type_str;
+      elmnt->box.tag |= json_val_str;
 
       // Get the reserved string object
       elmnt->val.istr = (json_istr_t*)b;
@@ -101,9 +101,9 @@ string_value:
 
   // Check if the string can be packed
 #if JSON(PACK_STRINGS)
-  bint pack = (len < JSON_PSTR_SIZE);
+  bool pack = (len < JSON_PSTR_SIZE);
 #else
-  const bint pack = false;
+  const bool pack = false;
 #endif
 
   // Allocate the string object
@@ -146,7 +146,7 @@ string_value:
 
       json_elmnt_t* elmnt = jsnp->elmnt;
 
-      elmnt->box.tag |= json_type_str;
+      elmnt->box.tag |= json_val_str;
 
       elmnt->val.istr = (json_istr_t*)b;
       elmnt->val.istr->len = len;
@@ -198,7 +198,7 @@ string_value:
       // Set the string value
       json_elmnt_t* elmnt = jsnp->elmnt;
 
-      elmnt->box.tag |= json_type_str;
+      elmnt->box.tag |= json_val_str;
       elmnt->val.str = str;
     }
   }
