@@ -221,44 +221,44 @@ int main (int argc, char** argv)
 
   switch (type)
   {
-    case json_type_obj:
+    case json_val_obj:
     {
       puts ("Object");
       break;
     }
-    case json_type_arr:
+    case json_val_arr:
     {
       puts ("Array");
       break;
     }
-    case json_type_str:
+    case json_val_str:
     {
       json_str_t str = json_get_str (elmnt);
       printf ("String: %.*s\n", str.len, str.buf);
 
       break;
     }
-    case json_type_int:
+    case json_val_int:
     {
       printf ("Number: %" PRIiMAX "\n", json_get_int (elmnt));
       break;
     }
-    case json_type_uint:
+    case json_val_uint:
     {
       printf ("Number: %" PRIuMAX "\n", json_get_uint (elmnt));
       break;
     }
-    case json_type_flt:
+    case json_val_flt:
     {
       printf ("Number: %.16g\n", json_get_flt (elmnt));
       break;
     }
-    case json_type_num:
+    case json_val_num:
     {
       puts ("Number");
       break;
     }
-    case json_type_primitive:
+    case json_val_tok:
     {
       if (json_is_bool (elmnt))
       {
