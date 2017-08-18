@@ -10,9 +10,10 @@ if (true)
 {
   // Get the unescaped string
   u8* buf = (u8*)p;
-  size_t len = (size_t)(o - p);
+  size_t len = o - p;
 
 #if JSON(STREAM)
+  // Part of the string is already buffered
   if (unlikely (jsnp->used != 0))
   {
     // Assemble the complete string
@@ -28,7 +29,7 @@ if (true)
   }
 #endif
 
-  // Null-terminate
+  // Null-terminate the string
   buf[len] = '\0';
 
   // String is a property key
@@ -60,8 +61,8 @@ if (true)
     // Set the value string
     jsax_str_t str;
 
-    str.buf = buf;
     str.len = len;
+    str.buf = buf;
 
     // Execute the value string event handler
     jsax_callback (jsnp->on_str, jsnp, str);

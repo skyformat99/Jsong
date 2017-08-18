@@ -10,10 +10,11 @@ if (true)
 {
   // Get the unescaped string
   u8* buf = (u8*)p;
-  size_t len = (size_t)(o - p);
+  size_t len = o - p;
 
 #if JSON(STREAM)
 
+  json_istr_t* str;
   u8* b = jsnp->buf;
 
   // Part of the string is already buffered
@@ -23,23 +24,20 @@ if (true)
     size_t sz = jsnp->used;
 
     json_buf_grow (b, len + 1u);
+    str = (json_istr_t*)b;
 
+    // Get the actual string buffer pointer & length
     if (likely (json_flags_key (state)))
     {
       json_str_copy (b + sz, buf, len);
-
-      // Get the actual string data
-      buf = b + sizeof (json_istr_t);
-      len += sz - sizeof (json_istr_t);
+      str->len = sz - sizeof (json_istr_t) + len;
 
       goto string_key;
     }
     else
     {
       str_copy (b + sz, buf, len);
-
-      buf = b + sizeof (json_istr_t);
-      len += sz - sizeof (json_istr_t);
+      str->len = sz - sizeof (json_istr_t) + len;
 
       goto string_value;
     }
@@ -51,26 +49,27 @@ if (true)
     b = mem_pool_alloc (jsnp->pool, sizeof (json_istr_t) + len + 1u);
     if (unlikely (b == null)) json_error (JSON_ERROR_MEMORY);
 
+    str = (json_istr_t*)b;
+    str->len = len;
+
     if (likely (json_flags_key (state)))
     {
-      json_str_copy (b + sizeof (json_istr_t), buf, len);
-      buf = b + sizeof (json_istr_t);
+      json_str_copy (str->buf, buf, len);
 
 string_key:
       // Null-terminate the string
-      buf[len] = '\0';
+      str->buf[str->len] = '\0';
 
-      // Check if the key string is too long to be hashed
   #if JSON(HASH_KEYS)
-      if (unlikely (len > JSON_KEY_LEN_MAX)) json_error (JSON_ERROR_MEMORY);
+      // Check if the key string is too long to be hashed
+      if (unlikely (str->len > JSON_KEY_LEN_MAX)) json_error (JSON_ERROR_MEMORY);
   #endif
 
       // Set the key value
       json_kv_t* kv = (json_kv_t*)(jsnp->elmnt);
 
-      // Get the reserved key object
-      kv->ukey.ikey = (json_ikey_t*)b;
-      kv->ukey.ikey->hash = json_hash_key (buf, len);
+      kv->ukey.ikey = (json_ikey_t*)str;
+      kv->ukey.ikey->hash = json_hash_key (str->buf, str->len);
 
       kv->ukey.tag |= json_str_pack;
 
@@ -80,20 +79,18 @@ string_key:
     }
     else
     {
-      str_copy (b + sizeof (json_istr_t), buf, len);
-      buf = b + sizeof (json_istr_t);
+      str_copy (str->buf, buf, len);
 
 string_value:
-      buf[len] = '\0';
+      str->buf[str->len] = '\0';
 
       // Set the string value
       json_elmnt_t* elmnt = jsnp->elmnt;
 
       elmnt->box.tag |= json_val_str;
 
-      // Get the reserved string object
-      elmnt->val.istr = (json_istr_t*)b;
-      elmnt->val.istr->len = len;
+      elmnt->val.istr = str;
+      elmnt->val.tag |= json_str_pack;
     }
   }
 
@@ -116,20 +113,23 @@ string_value:
   // String can be packed
   if (likely (pack))
   {
+    json_istr_t* str = (json_istr_t*)b;
+
+    str->len = len;
+    json_str_copy (str->buf, buf, len);
+    str->buf[str->len] = '\0';
+
     // Set the packed key string
     if (likely (json_flags_key (state)))
     {
   #if JSON(HASH_KEYS)
-      if (unlikely (len > JSON_KEY_LEN_MAX)) json_error (JSON_ERROR_MEMORY);
+      if (unlikely (str->len > JSON_KEY_LEN_MAX)) json_error (JSON_ERROR_MEMORY);
   #endif
-
-      json_str_copy (b + sizeof (json_istr_t), buf, len);
-      b[sizeof (json_istr_t) + len] = '\0';
 
       json_kv_t* kv = (json_kv_t*)(jsnp->elmnt);
 
-      kv->ukey.ikey = (json_ikey_t*)b;
-      kv->ukey.ikey->hash = json_hash_key (buf, len);
+      kv->ukey.ikey = (json_ikey_t*)str;
+      kv->ukey.ikey->hash = json_hash_key (str->buf, str->len);
 
       kv->ukey.tag |= json_str_pack;
 
@@ -141,16 +141,11 @@ string_value:
     // Set the packed value string
     else
     {
-      json_str_copy (b + sizeof (json_istr_t), buf, len);
-      b[sizeof (json_istr_t) + len] = '\0';
-
       json_elmnt_t* elmnt = jsnp->elmnt;
 
       elmnt->box.tag |= json_val_str;
 
-      elmnt->val.istr = (json_istr_t*)b;
-      elmnt->val.istr->len = len;
-
+      elmnt->val.istr = str;
       elmnt->val.tag |= json_str_pack;
     }
   }
@@ -158,26 +153,24 @@ string_value:
   // String is too long to be packed
   else
   {
-    // Null-terminate the string
-    buf[len] = '\0';
-
-    // Get the string object
+    // Set the string buffer
     json_str_t* str = (json_str_t*)b;
 
-    // Set the string buffer
     str->buf = buf;
+    str->len = len;
+
+    str->buf[str->len] = '\0';
 
     // String is a key
     if (likely (json_flags_key (state)))
     {
-      // Check if the key string is too long to be hashed
   #if JSON(HASH_KEYS)
-      if (unlikely (len > JSON_KEY_LEN_MAX)) json_error (JSON_ERROR_MEMORY);
+      // Hash the key string
+      if (unlikely (str->len > JSON_KEY_LEN_MAX)) json_error (JSON_ERROR_MEMORY);
   #endif
 
-      // Hash the key string
       json_key_t* key = (json_key_t*)str;
-      key->hash = json_hash_key (buf, len);
+      key->hash = json_hash_key (str->buf, str->len);
 
       // Set up the property object
       json_kv_t* kv = (json_kv_t*)(jsnp->elmnt);
@@ -192,10 +185,6 @@ string_value:
     // String is a value
     else
     {
-      // Set the string value length
-      str->len = len;
-
-      // Set the string value
       json_elmnt_t* elmnt = jsnp->elmnt;
 
       elmnt->box.tag |= json_val_str;
