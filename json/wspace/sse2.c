@@ -9,25 +9,10 @@
 if (true)
 {
 #if JSON(VALID_WHITESPACE)
-  #if CPU(64BIT)
-    const xi128 ws = _mm_set1_epi8 (' ');
-    const xi128 wt = _mm_set1_epi8 ('\t');
-    const xi128 wn = _mm_set1_epi8 ('\n');
-    const xi128 wr = _mm_set1_epi8 ('\r');
-  #else
-    static const u8 wv[4][16] aligned(16) =
-    {
-      {REPEAT16(' ')},
-      {REPEAT16('\t')},
-      {REPEAT16('\n')},
-      {REPEAT16('\r')}
-    };
-
-    const xi128 ws = _mm_load_si128 ((const xi128*)(wv[0]));
-    const xi128 wt = _mm_load_si128 ((const xi128*)(wv[1]));
-    const xi128 wn = _mm_load_si128 ((const xi128*)(wv[2]));
-    const xi128 wr = _mm_load_si128 ((const xi128*)(wv[3]));
-  #endif
+  const xi128 ws = _mm_set1_epi8 (' ');
+  const xi128 wt = _mm_set1_epi8 ('\t');
+  const xi128 wn = _mm_set1_epi8 ('\n');
+  const xi128 wr = _mm_set1_epi8 ('\r');
 #else
   const xi128 ws = _mm_set1_epi8 (' ');
 

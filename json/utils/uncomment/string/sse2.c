@@ -8,18 +8,8 @@
 
 if (true)
 {
-#if CPU(64BIT)
   const xi128 cq = _mm_set1_epi8 ('"');
   const xi128 cs = _mm_set1_epi8 ('/');
-#else
-  static const u8 cv[2][16] aligned(16) =
-  {
-    {REPEAT16('"')}, {REPEAT16('/')}
-  };
-
-  const xi128 cq = _mm_load_si128 ((const xi128*)(cv[0]));
-  const xi128 cs = _mm_load_si128 ((const xi128*)(cv[1]));
-#endif
 
 #if !JSON(UNCOMMENT_EXPLICIT)
   const xi128 cz = _mm_setzero_si128();

@@ -6,18 +6,8 @@
 // Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
 
-#if CPU(64BIT)
-  const xi128 snpr = _mm_set1_epi8 (31);
-  const xi128 sesc = _mm_set1_epi8 ('\\');
-#else
-  static const u8 svec[2][16] aligned(16) =
-  {
-    {REPEAT16 (31)}, {REPEAT16 ('\\')}
-  };
-
-  const xi128 snpr = _mm_load_si128 ((const xi128*)(svec[0]));
-  const xi128 sesc = _mm_load_si128 ((const xi128*)(svec[1]));
-#endif
+const xi128 snpr = _mm_set1_epi8 (31);
+const xi128 sesc = _mm_set1_epi8 ('\\');
 
 if (true)
 {

@@ -11,8 +11,7 @@ if (true)
   // With SSE4.2 we can validate whitespace for free
   const xi128 w = _mm_setr_epi8
   (
-    ' ', '\t', '\n', '\r', 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0
+    ' ', '\t', '\n', '\r', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
   );
 
   // SSE4.2 code uses the `pcmpestri` and `pcmpistri` insns
