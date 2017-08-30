@@ -27,6 +27,8 @@
   #error "Invalid definition of `JSON_POOL_SIZE`"
 #endif
 
+// -----------------------------------------------------------------------------
+
 #if (JSON_POOL_MAX == 0)
   #define JSON_POOL_MAX 4096u
 #endif

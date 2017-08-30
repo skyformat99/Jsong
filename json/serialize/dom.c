@@ -13,22 +13,27 @@
 #include <quantum/buffer.h>
 #include <quantum/string.h>
 
-#include <quantum/io.h>
-
 // -----------------------------------------------------------------------------
 
-#include "../serialize.h"
+#include "../api/core.h"
+#include "../api/macros.h"
+#include "../api/serialize.h"
+
 #include "../dom.h"
 #include "../utils.h"
 #include "../utils/misc.h"
 
 // -----------------------------------------------------------------------------
+// Initialization
+// -----------------------------------------------------------------------------
 
-void json_serialize_init (json_serialize_t* st, json_node_t root
-, u8* buf, size_t size, size_t fill)
+void json_prefix (serialize_init) (json_prefix (serialize_t)* st
+, json_node_t root, u8* buf, size_t size, size_t fill)
 {
   st->root = root;
   st->node = root;
+
+  json_prefix (serialize_init_buf) (st, buf, size, fill);
 
   st->buf = buf;
   st->size = size;
@@ -51,18 +56,14 @@ void json_serialize_init (json_serialize_t* st, json_node_t root
 #else
   st->big_flt_dig = 16u;
 #endif
+
+#if ENABLED(USON)
+  st->verb = null;
+  st->data = false;
+#endif
 }
 
-void json_format_init (json_format_t* st, json_node_t root
-, u8* buf, size_t size, size_t fill)
-{
-  json_serialize_init ((json_serialize_t*)st, root, buf, size, fill);
-
-  st->indent_size = 2u;
-  st->indent_width = 0;
-}
-
-void json_serialize_init_buf (json_serialize_t* st
+void json_prefix (serialize_init_buf) (json_prefix (serialize_t)* st
 , u8* buf, size_t size, size_t fill)
 {
   st->buf = buf;
@@ -70,20 +71,37 @@ void json_serialize_init_buf (json_serialize_t* st
   st->fill = fill;
 }
 
-void json_format_init_buf (json_format_t* st
+// -----------------------------------------------------------------------------
+
+void json_prefix (format_init) (json_prefix (format_t)* st, json_node_t root
 , u8* buf, size_t size, size_t fill)
 {
-  json_serialize_init_buf ((json_serialize_t*)st, buf, size, fill);
+  json_prefix (serialize_init) ((json_prefix (serialize_t)*)st
+  , root, buf, size, fill);
+
+  st->indent_size = 2u;
+  st->indent_width = 0;
+}
+
+void json_prefix (format_init_buf) (json_prefix (format_t)* st
+, u8* buf, size_t size, size_t fill)
+{
+  json_prefix (serialize_init_buf) ((json_prefix (serialize_t)*)st
+  , buf, size, fill);
 }
 
 // -----------------------------------------------------------------------------
+// Serialization
+// -----------------------------------------------------------------------------
 
-bool json_serialize (json_serialize_t* st)
+bool json_prefix (serialize) (json_prefix (serialize_t)* st)
 {
+  #define t_eol OS_EOL
+
   #include "dom/template.c"
 }
 
-bool json_format (json_format_t* st)
+bool json_prefix (format) (json_prefix (format_t)* st)
 {
   #define T_PRETTY
   #define t_eol OS_EOL

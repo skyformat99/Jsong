@@ -8,6 +8,8 @@
 
 #if JSON(LINE_COL)
 
+if (true)
+{
   // Skip JSON whitespace and track the current line and column numbers
   uint line = jsnp->line;
   uint col = jsnp->col;
@@ -39,8 +41,9 @@
 
   jsnp->line = line;
   jsnp->col = col;
+}
 
-#else
+#else // JSON(LINE_COL) ][
 
   // Skip the first whitespace character
   j++;
@@ -59,12 +62,8 @@
   {
     // Between some tokens SIMD whitespace processing
     // is undesirable
-  #if !T(NOSIMD)
-    #if CPU(SSE42)
-      #include "sse42.c"
-    #elif CPU(SSE2)
-      #include "sse2.c"
-    #endif
+  #if !NO(SIMD)
+    #include "simd.c"
   #endif
 
     j++;
@@ -78,4 +77,4 @@
 
 // -----------------------------------------------------------------------------
 
-#undef T_NOSIMD
+#undef NO_SIMD

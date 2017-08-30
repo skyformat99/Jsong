@@ -29,15 +29,13 @@ if not exist build (
 
 :: Build the JSON processing utilities
 
-gcc -O3 %MARCH% -fno-align-labels ^
-  -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
-  -c %JSONG%/json/utils.c -o build\utils.o 2> build\utils.log
+gcc -O3 %MARCH% -fno-align-labels -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
+  -c %JSONG%/json/utils/unescape.c -o build\utils.o 2> build\utils.log
 if %ERRORLEVEL% neq 0 (echo "Build error: utils.o" && exit /b %ERRORLEVEL%)
 
 :: Build the app
 
-gcc -O3 %MARCH% ^
-  -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
+gcc -O3 %MARCH% -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
   -c unescape.c -o build\unescape.o 2> build\unescape.log
 if %ERRORLEVEL% neq 0 (echo "Build error: unescape.o" && exit /b %ERRORLEVEL%)
 

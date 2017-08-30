@@ -1,98 +1,136 @@
 // =============================================================================
 // <utils/escape.c>
 //
-// JSON string escaping template.
+// JSON string escaping.
 //
 // Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
 
-if (true)
+#include <quantum/build.h>
+#include <quantum/core.h>
+
+#include <quantum/integer.h>
+
+// -----------------------------------------------------------------------------
+
+#include "../api/core.h"
+#include "../api/macros.h"
+
+#include "../utils.h"
+#include "../utils/misc.h"
+
+// -----------------------------------------------------------------------------
+// Explicit string
+// -----------------------------------------------------------------------------
+
+int json_prefix (escape_length) (const u8* in, size_t len
+, u8** end, size_t* num)
 {
-  int need;
+  register uint c;
 
-  uf32 e = json_chr_escape (c);
+  const u8* j = in;
+  const u8* e = in + len;
 
-  if (unlikely (e == 1u))
+  size_t size = 0;
+
+  while (j != e)
   {
-#if JSON(ESCAPE_SIZE)
-    size += 2u;
-#else
-    if (unlikely ((size_t)(m - d) < 2u))
-    {
-      need = 2 - (m - d);
+    c = *j;
 
-needspace:
-      *end = (u8*)s;
-      *num = (size_t)(d - dst);
+    #define JSON_SIZE
 
-      return need;
-    }
-
-    d[0] = '\\';
-    d[1] = c;
-
-    d += 2;
-#endif
-  }
-  else if (unlikely (e == 2u))
-  {
-#if JSON(ESCAPE_SIZE)
-    size += 2u;
-#else
-    if (unlikely ((size_t)(m - d) < 2u))
-    {
-      need = 2 - (m - d);
-      goto needspace;
-    }
-
-    d[0] = '\\';
-  #if HAVE(INT64)
-    d[1] = 0x00007266006E7462u >> ((c - 8u) * 8u);
-  #else
-    d[1] = "\0\0\0\0\0\0\0\0btn\0fr"[c];
-  #endif
-
-    d += 2;
-#endif
-  }
-  else if (unlikely (e == 3u))
-  {
-#if JSON(ESCAPE_SIZE)
-    size += 6u;
-#else
-    if (unlikely ((size_t)(m - d) < 6u))
-    {
-      need = 6 - (m - d);
-      goto needspace;
-    }
-
-    d[0] = '\\';
-    d[1] = 'u';
-    d[2] = '0';
-    d[3] = '0';
-    int_to_xdig2 (d + 4, c, false);
-
-    d += 6;
-#endif
-  }
-  else
-  {
-#if JSON(ESCAPE_SIZE)
-    size++;
-#else
-    if (unlikely (m == d))
-    {
-      need = 1u;
-      goto needspace;
-    }
-
-    *d++ = c;
-#endif
+    #include "escape/template.c"
   }
 
-  s++;
+  *end = (u8*)j;
+  *num = size;
+
+  return 0;
 }
 
 // -----------------------------------------------------------------------------
 
-#undef JSON_ESCAPE_SIZE
+int json_prefix (escape) (const u8* restrict in, size_t len
+, u8* restrict out, size_t size
+, u8** end, size_t* num)
+{
+  register uint c;
+
+  const u8* restrict j = in;
+  const u8* e = in + len;
+
+  u8* restrict o = out;
+  const u8* m = out + size;
+
+  while (j != e)
+  {
+    c = *j;
+
+    #include "escape/template.c"
+  }
+
+  *end = (u8*)j;
+  *num = o - out;
+
+  return 0;
+}
+
+// -----------------------------------------------------------------------------
+// Implicit string
+// -----------------------------------------------------------------------------
+
+int json_prefix (escapei_length) (const u8* in
+, u8** end, size_t* num)
+{
+  register uint c;
+
+  const u8* j = in;
+
+  size_t size = 1u;
+
+  while ((c = *j) != '\0')
+  {
+    #define JSON_SIZE
+
+    #include "escape/template.c"
+  }
+
+  *end = (u8*)j;
+  *num = size;
+
+  return 0;
+}
+
+// -----------------------------------------------------------------------------
+
+int json_prefix (escapei) (const u8* restrict in
+, u8* restrict out, size_t size
+, u8** end, size_t* num)
+{
+  register uint c;
+
+  const u8* restrict j = in;
+
+  u8* restrict o = out;
+  const u8* m = out + size;
+
+  while ((c = *j) != '\0')
+  {
+    #include "escape/template.c"
+  }
+
+  if (o == m)
+  {
+    *end = (u8*)j;
+    *num = o - out;
+
+    return 1;
+  }
+
+  *o = '\0';
+
+  *end = (u8*)j;
+  *num = o - out;
+
+  return 0;
+}

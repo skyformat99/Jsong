@@ -12,6 +12,10 @@ if (true)
   const xi128 cs = _mm_set1_epi8 ('/');
   const xi128 ch = _mm_set1_epi8 ('#');
 
+#if ENABLED(USON)
+  const xi128 cb = _mm_set1_epi8 ('(');
+#endif
+
 #if !JSON(UNCOMMENT_EXPLICIT)
   const xi128 cz = _mm_setzero_si128();
 #endif
@@ -25,6 +29,10 @@ if (true)
 
     xi128 cm = _mm_or_si128 (_mm_or_si128 (_mm_cmpeq_epi8 (cj, cq)
     , _mm_cmpeq_epi8 (cj, cs)), _mm_cmpeq_epi8 (cj, ch));
+
+#if ENABLED(USON)
+    cm = _mm_or_si128 (cm, _mm_cmpeq_epi8 (cj, cb));
+#endif
 
 #if !JSON(UNCOMMENT_EXPLICIT)
     cm = _mm_or_si128 (cm, _mm_cmpeq_epi8 (cj, cz));

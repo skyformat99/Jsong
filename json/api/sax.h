@@ -25,7 +25,7 @@
 // Event handler execution
 #define jsax_callback(fn, ...) do\
 {                                \
-  if (unlikely (!((fn)(__VA_ARGS__)))) json_error (JSON_ERROR_CALLBACK);\
+  if (unlikely (!((fn)(__VA_ARGS__)))) goto pause;\
 } while (0)
 
 // -----------------------------------------------------------------------------

@@ -1,13 +1,13 @@
 // =============================================================================
-// <string/skip_simd.c>
+// <verbatim/id/id.c>
 //
-// Skip through JSON string faster using SIMD.
+// USON verbatim string identifier handling.
 //
 // Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
 
-#if CPU(SSE42)
-  #include "skip_sse42.c"
-#elif CPU(SSE2)
-  #include "skip_sse2.c"
+#if JSON(SAX)
+  #include "sax.c"
+#else
+  #include "dom.c"
 #endif

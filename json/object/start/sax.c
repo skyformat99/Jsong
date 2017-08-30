@@ -16,5 +16,7 @@ if (true)
   jsax_push_obj (jsnp->stack, depth);
 
   // Execute the object start event handler
+#if !USON(CONFIG)
   jsax_callback (jsnp->on_start, jsnp, true);
+#endif
 }

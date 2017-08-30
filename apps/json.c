@@ -18,7 +18,7 @@
 #include <json/dom.h>
 #include <json/utils.h>
 #include <json/utils/consts.h>
-#include <json/serialize.h>
+#include <json/api/serialize.h>
 
 // -----------------------------------------------------------------------------
 
@@ -64,7 +64,7 @@ int main (int argc, char** argv)
   fclose (f);
 
   // Preprocess the JSON to remove comments
-  json_uncommenti (json);
+  json_prefix (uncommenti) (json);
 
   // Create the memory pool
   bool err = false;
@@ -78,11 +78,11 @@ int main (int argc, char** argv)
   }
 
   // Initialize the DOM API JSON parser
-  json_t jsnp;
-  json_initi (&jsnp, pool);
+  json_prefix (t) jsnp;
+  json_prefix (initi) (&jsnp, pool);
 
   // Parse the JSON document
-  json_node_t root = json_parsei (&jsnp, json);
+  json_node_t root = json_prefix (parsei) (&jsnp, json);
 
   if (!json_is_elmnt (root))
   {
@@ -129,24 +129,24 @@ int main (int argc, char** argv)
         continue;
       }
 
-      json_format_t st;
+      json_prefix (format_t) st;
       u8 buf[BUF_SIZE];
 
-      json_format_init (&st, node, buf, numof (buf), 0);
+      json_prefix (format_init) (&st, node, buf, numof (buf), 0);
 
       while (true)
       {
         bool ret;
 
-        if (stri_equal (query, "format")) ret = json_format (&st);
-        else ret = json_serialize ((json_serialize_t*)&st);
+        if (stri_equal (query, "format")) ret = json_prefix (format) (&st);
+        else ret = json_prefix (serialize) ((json_prefix (serialize_t)*)&st);
 
         printf ("%.*s", (uint)st.fill, buf);
 
         if (ret) break;
         assert (st.need <= numof (buf));
 
-        json_format_init_buf (&st, buf, numof (buf), 0);
+        json_prefix (format_init_buf) (&st, buf, numof (buf), 0);
       }
 
       putchar ('\n');
@@ -265,7 +265,7 @@ int main (int argc, char** argv)
     #endif
   #endif
         }
-#endif
+#endif // JSON(BIG_NUMBERS)
         else if (json_is_num_special (elmnt))
         {
           printf ("Number range error [%X]\n", elmnt->val.tag);

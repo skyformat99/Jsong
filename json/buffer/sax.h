@@ -25,9 +25,9 @@
     if (!(jsnp->on_mem (jsnp, &(jsnp->buf), &(jsnp->size), (a_sz))))\
     {                                \
       json_error (JSON_ERROR_MEMORY);\
-    }                 \
-                      \
-    a_buf = jsnp->buf;\
+    }                    \
+                         \
+    *(a_buf) = jsnp->buf;\
   }       \
 } while (0)
 

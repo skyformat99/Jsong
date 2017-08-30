@@ -42,7 +42,7 @@
 {                                  \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                                    \
-  elmnt->box.tag |= json_val_num; \
+  elmnt->box.tag |= json_val_num;  \
   json_val_init (elmnt, num.big);  \
                                    \
   elmnt->val.num.big->i = (a);     \
@@ -53,7 +53,7 @@
 {                                   \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                                     \
-  elmnt->box.tag |= json_val_num;  \
+  elmnt->box.tag |= json_val_num;   \
   json_val_init (elmnt, num.big);   \
                                     \
   elmnt->val.num.big->u = (a);      \
@@ -64,7 +64,7 @@
 {                                  \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                                    \
-  elmnt->box.tag |= json_val_num; \
+  elmnt->box.tag |= json_val_num;  \
   json_val_init (elmnt, num.big);  \
                                    \
   elmnt->val.num.big->f = (a);     \
@@ -78,7 +78,7 @@
 {                                   \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                                     \
-  elmnt->box.tag |= json_val_num;  \
+  elmnt->box.tag |= json_val_num;   \
   elmnt->val.tag = json_num_special \
   | json_num_err | json_num_special_oflow\
   | (meta.sign << json_num_special_sign_bit);\
@@ -88,10 +88,31 @@
 {                                   \
   json_elmnt_t* elmnt = jsnp->elmnt;\
                                     \
-  elmnt->box.tag |= json_val_num;  \
+  elmnt->box.tag |= json_val_num;   \
   elmnt->val.tag = json_num_special \
   | json_num_err | json_num_special_uflow\
   | (meta.sign << json_num_special_sign_bit);\
+} while (0)
+
+// -----------------------------------------------------------------------------
+
+#define uson_num_inf_evnt(neg) do\
+{                                \
+  json_elmnt_t* elmnt = jsnp->elmnt;\
+                                    \
+  elmnt->box.tag |= json_val_num;   \
+  elmnt->val.tag = json_num_special \
+  | uson_num_inf | json_num_special_oflow\
+  | ((neg) << json_num_special_sign_bit);\
+} while (0)
+
+#define uson_num_nan_evnt(neg) do\
+{                                \
+  json_elmnt_t* elmnt = jsnp->elmnt;\
+                                    \
+  elmnt->box.tag |= json_val_num;   \
+  elmnt->val.tag = json_num_special \
+  | uson_num_nan | ((neg) << json_num_special_sign_bit);\
 } while (0)
 
 // -----------------------------------------------------------------------------

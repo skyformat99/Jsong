@@ -8,128 +8,137 @@
 
 if (true)
 {
-  register u32 n = (uintptr_t)s & 15u;
-  const u8* sa = assume_aligned (16u, ptr_align_floor (16u, s));
+  register u32 n = (uintptr_t)j & 15u;
+  const u8* ja = assume_aligned (16u, ptr_align_floor (16u, j));
 
-  xi128 si = _mm_load_si128 ((const xi128*)sa);
+  xi128 xj = _mm_load_si128 ((const xi128*)ja);
 
-  xi128 sm = _mm_or_si128 (_mm_cmpeq_epi8 (_mm_max_epu8 (si, snpr), snpr)
-  , _mm_cmpeq_epi8 (si, sesc));
+  xi128 xm = _mm_or_si128 (_mm_cmpeq_epi8 (_mm_max_epu8 (xj, xnpr), xnpr)
+  , _mm_cmpeq_epi8 (xj, xesc));
 
-  register u32 m = _mm_movemask_epi8 (sm) >> n;
+#if ENABLED(USON)
+  xm = _mm_or_si128 (xm, _mm_cmpeq_epi8 (xj, xdel));
+#endif
 
-  if (likely (m != 0))
+  register u32 b = _mm_movemask_epi8 (xm) >> n;
+
+  if (likely (b != 0))
   {
-    m = bsf32 (m);
+    b = bsf32 (b);
 
-    if (json_over (s, m))
+    if (json_over (j, b))
     {
 sse_end:
-      m = (size_t)(e - s);
+      b = (size_t)(e - j);
 
-#if JSON(UNESCAPE_SIZE)
-      size += m;
+#if JSON(SIZE)
+      size += b;
 #else
-  #if !JSON(UNESCAPE_INPLACE)
-      if (unlikely ((size_t)(b - o) < m))
+  #if !JSON(INPLACE)
+      if (unlikely ((size_t)(m - o) < b))
       {
-        need = m - (b - o);
+        need = b - (m - o);
         goto needspace;
       }
   #endif
 
-      sse_buf_move_left (o, s, m);
-      o += m;
+      sse_buf_move_left (o, j, b);
+      o += b;
 #endif
 
-#if JSON(UNESCAPE_INPLACE)
-      s = (u8*)e;
+#if JSON(INPLACE)
+      j = (u8*)e;
 #else
-      s = e;
+      j = e;
 #endif
 
       break;
     }
 
 sse_done:
-#if JSON(UNESCAPE_SIZE)
-    size += m;
+#if JSON(SIZE)
+    size += b;
 #else
-  #if !JSON(UNESCAPE_INPLACE)
-    if (unlikely ((size_t)(b - o) < m))
+  #if !JSON(INPLACE)
+    if (unlikely ((size_t)(m - o) < b))
     {
-      need = m - (b - o);
+      need = b - (m - o);
       goto needspace;
     }
   #endif
 
-    sse_buf_move_left (o, s, m);
-    o += m;
+    sse_buf_move_left (o, j, b);
+    o += b;
 #endif
 
-    s += m;
+    j += b;
+    c = *j;
 
     repeat (unescape);
   }
 
-  sa += 16;
+  ja += 16;
 
-  if (json_over (sa, 0)) goto sse_end;
+  if (json_over (ja, 0)) goto sse_end;
 
-#if JSON(UNESCAPE_SIZE)
+#if JSON(SIZE)
   size += 16u - n;
 #else
-  m = 16u - n;
+  b = 16u - n;
 
-  #if !JSON(UNESCAPE_INPLACE)
-    if (unlikely ((size_t)(b - o) < m))
+  #if !JSON(INPLACE)
+    if (unlikely ((size_t)(m - o) < b))
     {
-      need = m - (b - o);
+      need = b - (m - o);
       goto needspace;
     }
   #endif
 
-  sse_buf_move_left (o, s, m);
-  o += m;
+  sse_buf_move_left (o, j, b);
+  o += b;
 #endif
 
-  s = assume_aligned (16u, sa);
+  j = assume_aligned (16u, ja);
 
   while (true)
   {
-    si = _mm_load_si128 ((const xi128*)s);
+    xj = _mm_load_si128 ((const xi128*)j);
 
-    sm = _mm_or_si128 (_mm_cmpeq_epi8 (_mm_max_epu8 (si, snpr), snpr)
-    , _mm_cmpeq_epi8 (si, sesc));
+    xm = _mm_or_si128 (_mm_cmpeq_epi8 (_mm_max_epu8 (xj, xnpr), xnpr)
+    , _mm_cmpeq_epi8 (xj, xesc));
 
-    m = _mm_movemask_epi8 (sm);
+#if ENABLED(USON)
+    xm = _mm_or_si128 (xm, _mm_cmpeq_epi8 (xj, xdel));
+#endif
 
-    if (likely (m != 0))
+    b = _mm_movemask_epi8 (xm);
+
+    if (likely (b != 0))
     {
-      m = bsf32 (m);
+      b = bsf32 (b);
 
-      if (json_over (s, m)) goto sse_end;
+      if (json_over (j, b)) goto sse_end;
 
       goto sse_done;
     }
 
-    if (json_over (s, 16u)) goto sse_end;
+    if (json_over (j, 16u)) goto sse_end;
 
-#if JSON(UNESCAPE_SIZE)
+#if JSON(SIZE)
     size += 16u;
 #else
-  #if !JSON(UNESCAPE_INPLACE)
-    if (unlikely ((size_t)(b - o) < 16u))
+  #if !JSON(INPLACE)
+    if (unlikely ((size_t)(m - o) < 16u))
     {
-      need = 16 - (b - o);
+      need = 16 - (m - o);
       goto needspace;
     }
   #endif
 
-    _mm_storeu_si128 ((xi128*)o, si);
+    _mm_storeu_si128 ((xi128*)o, xj);
     o += 16;
 #endif
 
-    s += 16;
+    j += 16;
   }
 }

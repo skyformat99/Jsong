@@ -8,119 +8,120 @@
 
 if (true)
 {
-  register u32 n = (uintptr_t)s & 15u;
-  const u8* sa = assume_aligned (16u, ptr_align_floor (16u, s));
+  register u32 n = (uintptr_t)j & 15u;
+  const u8* ja = assume_aligned (16u, ptr_align_floor (16u, j));
 
-  register u32 m = _mm_cvtsi128_si32 (_mm_cmpestrm (st, 4, _mm_load_si128 ((const xi128*)sa), 16
+  register u32 b = _mm_cvtsi128_si32 (_mm_cmpestrm (xt, 4, _mm_load_si128 ((const xi128*)ja), 16
   , _SIDD_UBYTE_OPS | _SIDD_CMP_RANGES | _SIDD_NEGATIVE_POLARITY | _SIDD_BIT_MASK)) >> n;
 
-  if (likely (m != 0))
+  if (likely (b != 0))
   {
-    m = bsf32 (m);
+    b = bsf32 (b);
 
-    if (json_over (s, m))
+    if (json_over (j, b))
     {
 sse_end:
-      m = (size_t)(e - s);
+      b = (size_t)(e - j);
 
-#if JSON(UNESCAPE_SIZE)
-      size += m;
+#if JSON(SIZE)
+      size += b;
 #else
-  #if !JSON(UNESCAPE_INPLACE)
-      if (unlikely ((size_t)(b - o) < m))
+  #if !JSON(INPLACE)
+      if (unlikely ((size_t)(m - o) < b))
       {
-        need = m - (b - o);
+        need = b - (m - o);
         goto needspace;
       }
   #endif
 
-      sse_buf_move_left (o, s, m);
-      o += m;
+      sse_buf_move_left (o, j, b);
+      o += b;
 #endif
 
-#if JSON(UNESCAPE_INPLACE)
-      s = (u8*)e;
+#if JSON(INPLACE)
+      j = (u8*)e;
 #else
-      s = e;
+      j = e;
 #endif
 
       break;
     }
 
 sse_done:
-#if JSON(UNESCAPE_SIZE)
-    size += m;
+#if JSON(SIZE)
+    size += b;
 #else
-  #if !JSON(UNESCAPE_INPLACE)
-    if (unlikely ((size_t)(b - o) < m))
+  #if !JSON(INPLACE)
+    if (unlikely ((size_t)(m - o) < b))
     {
-      need = m - (b - o);
+      need = b - (m - o);
       goto needspace;
     }
   #endif
 
-    sse_buf_move_left (o, s, m);
-    o += m;
+    sse_buf_move_left (o, j, b);
+    o += b;
 #endif
 
-    s += m;
+    j += b;
+    c = *j;
 
     repeat (unescape);
   }
 
-  sa += 16;
+  ja += 16;
 
-  if (json_over (sa, 0)) goto sse_end;
+  if (json_over (ja, 0)) goto sse_end;
 
-#if JSON(UNESCAPE_SIZE)
+#if JSON(SIZE)
   size += 16u - n;
 #else
-  m = 16u - n;
+  b = 16u - n;
 
-  #if !JSON(UNESCAPE_INPLACE)
-    if (unlikely ((size_t)(b - o) < m))
+  #if !JSON(INPLACE)
+    if (unlikely ((size_t)(m - o) < b))
     {
-      need = m - (b - o);
+      need = b - (m - o);
       goto needspace;
     }
   #endif
 
-  sse_buf_move_left (o, s, m);
-  o += m;
+  sse_buf_move_left (o, j, b);
+  o += b;
 #endif
 
-  s = assume_aligned (16u, sa);
+  j = assume_aligned (16u, ja);
 
   while (true)
   {
-    xi128 si = _mm_load_si128 ((const xi128*)s);
+    xi128 xj = _mm_load_si128 ((const xi128*)j);
 
-    m = _mm_cmpistri (st, si, _SIDD_UBYTE_OPS | _SIDD_CMP_RANGES
+    b = _mm_cmpistri (xt, xj, _SIDD_UBYTE_OPS | _SIDD_CMP_RANGES
     | _SIDD_NEGATIVE_POLARITY | _SIDD_LEAST_SIGNIFICANT);
 
-    if (likely (m != 16u))
+    if (likely (b != 16u))
     {
-      if (json_over (s, m)) goto sse_end;
+      if (json_over (j, b)) goto sse_end;
       goto sse_done;
     }
 
-    if (json_over (s, 16u)) goto sse_end;
+    if (json_over (j, 16u)) goto sse_end;
 
-#if JSON(UNESCAPE_SIZE)
+#if JSON(SIZE)
     size += 16u;
 #else
-  #if !JSON(UNESCAPE_INPLACE)
-    if (unlikely ((size_t)(b - o) < 16u))
+  #if !JSON(INPLACE)
+    if (unlikely ((size_t)(m - o) < 16u))
     {
-      need = 16 - (b - o);
+      need = 16 - (m - o);
       goto needspace;
     }
   #endif
 
-    _mm_storeu_si128 ((xi128*)o, si);
+    _mm_storeu_si128 ((xi128*)o, xj);
     o += 16;
 #endif
 
-    s += 16;
+    j += 16;
   }
 }

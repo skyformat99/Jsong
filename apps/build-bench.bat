@@ -37,36 +37,36 @@ if %ERRORLEVEL% neq 0 (echo "Build error: io.o" && exit /b %ERRORLEVEL%)
 :: Build the DOM API parsers
 
 gcc -O3 %MARCH% -fno-align-labels -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
-  -c %VALIDWHITESPACE% %JSONG%/json/json.c -o build\jsonz.o 2> build\jsonz.log
+  -c %VALIDWHITESPACE% %JSONG%/json/parse.c -o build\jsonz.o 2> build\jsonz.log
 if %ERRORLEVEL% neq 0 (echo "Build error: jsonz.o" && exit /b %ERRORLEVEL%)
 
 gcc -O3 %MARCH% -fno-align-labels -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
-  -c -DJSON_EXPLICIT %VALIDWHITESPACE% %JSONG%/json/json.c -o build\jsonb.o 2> build\jsonb.log
+  -c -DJSON_EXPLICIT %VALIDWHITESPACE% %JSONG%/json/parse.c -o build\jsonb.o 2> build\jsonb.log
 if %ERRORLEVEL% neq 0 (echo "Build error: jsonb.o" && exit /b %ERRORLEVEL%)
 
 gcc -O3 %MARCH% -fno-align-labels -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
-  -c -DJSON_STREAM %VALIDWHITESPACE% %JSONG%/json/json.c -o build\jsons.o 2> build\jsons.log
+  -c -DJSON_STREAM %VALIDWHITESPACE% %JSONG%/json/parse.c -o build\jsons.o 2> build\jsons.log
 if %ERRORLEVEL% neq 0 (echo "Build error: jsons.o" && exit /b %ERRORLEVEL%)
 
-gcc -O3 %MARCH% -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
+gcc -O3 %MARCH% -fno-align-labels -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
   -c %JSONG%/json/dom.c -o build\dom.o 2> build\dom.log
 if %ERRORLEVEL% neq 0 (echo "Build error: dom.o" && exit /b %ERRORLEVEL%)
 
 :: Build the SAX API parsers
 
 gcc -O3 %MARCH% -fno-align-labels -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
-  -c -DJSON_SAX %VALIDWHITESPACE% %JSONG%/json/json.c -o build\jsaxz.o 2> build\jsaxz.log
+  -c -DJSON_SAX %VALIDWHITESPACE% %JSONG%/json/parse.c -o build\jsaxz.o 2> build\jsaxz.log
 if %ERRORLEVEL% neq 0 (echo "Build error: jsaxz.o" && exit /b %ERRORLEVEL%)
 
 gcc -O3 %MARCH% -fno-align-labels -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
-  -c -DJSON_SAX -DJSON_EXPLICIT %VALIDWHITESPACE% %JSONG%/json/json.c -o build\jsaxb.o 2> build\jsaxb.log
+  -c -DJSON_SAX -DJSON_EXPLICIT %VALIDWHITESPACE% %JSONG%/json/parse.c -o build\jsaxb.o 2> build\jsaxb.log
 if %ERRORLEVEL% neq 0 (echo "Build error: jsaxb.o" && exit /b %ERRORLEVEL%)
 
 gcc -O3 %MARCH% -fno-align-labels -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
-  -c -DJSON_SAX -DJSON_STREAM %VALIDWHITESPACE% %JSONG%/json/json.c -o build\jsaxs.o 2> build\jsaxs.log
+  -c -DJSON_SAX -DJSON_STREAM %VALIDWHITESPACE% %JSONG%/json/parse.c -o build\jsaxs.o 2> build\jsaxs.log
 if %ERRORLEVEL% neq 0 (echo "Build error: jsaxs.o" && exit /b %ERRORLEVEL%)
 
-gcc -O3 %MARCH% -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
+gcc -O3 %MARCH% -fno-align-labels -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
   -c %JSONG%/json/sax.c -o build\sax.o 2> build\sax.log
 if %ERRORLEVEL% neq 0 (echo "Build error: sax.o" && exit /b %ERRORLEVEL%)
 

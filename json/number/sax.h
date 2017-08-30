@@ -92,4 +92,27 @@
 
 // -----------------------------------------------------------------------------
 
+#define uson_num_inf_evnt(neg) do\
+{                                \
+  jsax_num_t num;                \
+                                 \
+  num.tag = json_num_special     \
+  | uson_num_inf | json_num_special_oflow\
+  | ((neg) << json_num_special_sign_bit);\
+                                 \
+  jsax_callback (jsnp->on_num, jsnp, num);\
+} while (0)
+
+#define uson_num_nan_evnt(neg) do\
+{                                \
+  jsax_num_t num;                \
+                                 \
+  num.tag = json_num_special     \
+  | uson_num_inf | ((neg) << json_num_special_sign_bit);\
+                                 \
+  jsax_callback (jsnp->on_num, jsnp, num);\
+} while (0)
+
+// -----------------------------------------------------------------------------
+
 #endif

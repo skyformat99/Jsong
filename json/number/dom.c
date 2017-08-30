@@ -28,7 +28,7 @@ if (true)
       // Assemble the complete number string
       size_t sz = jsnp->used;
 
-      json_buf_grow (b, len + 1u);
+      json_buf_grow (&b, len + 1u);
       json_str_copy (b + sz, buf, len);
 
       buf = b + sizeof (json_num_istr_t);
@@ -70,8 +70,8 @@ if (true)
 
       // Allocate the number string object
       ptr = mem_pool_alloc (jsnp->pool, pack
-      ? (sizeof (json_istr_t) + JSON_PSTR_SIZE)
-      : sizeof (json_str_t));
+      ? (sizeof (json_num_istr_t) + JSON_PSTR_SIZE)
+      : sizeof (json_num_str_t));
 
       if (unlikely (ptr == null)) json_error (JSON_ERROR_MEMORY);
 

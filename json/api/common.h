@@ -9,10 +9,6 @@
 #ifndef H_6B58350F01524715AEE7F79CAA7F2C37
 #define H_6B58350F01524715AEE7F79CAA7F2C37
 
-// -----------------------------------------------------------------------------
-
-#include "../utils/support.h"
-
 // =============================================================================
 // Constants
 // -----------------------------------------------------------------------------
@@ -32,7 +28,7 @@
 // =============================================================================
 // Types
 // -----------------------------------------------------------------------------
-// String
+// Strings
 // -----------------------------------------------------------------------------
 // Value string
 // -----------------------------------------------------------------------------
@@ -46,9 +42,17 @@ typedef struct json_str_s
 } json_str_t, jsax_str_t;
 
 #define json_str_make(buf, len) (json_str_t){(len), (buf)}
-
 #define json_str_from_stri(str) (json_str_t){(uint)stri_length (str), (str)}
-#define json_str_from_cstr(str) (json_str_t){(uint)cstrlen (str), (str)}
+
+typedef struct json_str_const_s
+{
+  uint len;
+  const u8* buf;
+} json_str_const_t, jsax_str_const_t;
+
+#define json_str_const_make(buf, len) (json_str_const_t){(len), (buf)}
+#define json_str_const_from_stri(str) (json_str_const_t){(uint)stri_length (str), (str)}
+#define json_str_const_from_cstr(str) (json_str_const_t){(uint)cstrlen (str), (str)}
 
 // -----------------------------------------------------------------------------
 // Key string (structure layout must be identical to that of value string)
@@ -57,6 +61,25 @@ typedef struct json_key_s
   uint hash;
   u8* buf;
 } json_key_t, jsax_key_t;
+
+// -----------------------------------------------------------------------------
+// USON strings
+// -----------------------------------------------------------------------------
+// "Here-document" (or "verbatim") string
+typedef struct uson_str_verb_s
+{
+  json_str_t data; // Must be first
+  json_str_t id;   // Delimiting identifier
+} uson_str_verb_t, usax_str_verb_t;
+
+// -----------------------------------------------------------------------------
+// Base64 USON (assuming defaults) encoded string
+typedef struct uson_str_data_s
+{
+  json_str_t data; // Must be first
+  json_str_t mime; // Optional MIME type
+  uint scheme;
+} uson_str_data_t, usax_str_data_t;
 
 // -----------------------------------------------------------------------------
 // Number
@@ -79,8 +102,8 @@ typedef struct json_num_meta_s
   u8 len_fraction;
 
   // Length of the exponential part excluding [Ee] and its sign
-  // is derived as such: `len - sign - len_cardinal - fraction - len_fraction
-  // - exponent - exponent_sign`
+  // is derived as such: `len_number - sign - len_cardinal
+  // - fraction - len_fraction - exponent - exponent_sign`
 
   // Total number length
   u8 len_number;
@@ -175,11 +198,11 @@ typedef enum json_num_special_kind_e
 {
   // Range error
   json_num_err = 0 << json_num_special_kind_bit,
-  // Infinity and zero (distinguished from the above as not an error)
-  json_num_inf = 1 << json_num_special_kind_bit,
-  json_num_zero = json_num_inf,
+  // Infinity and zero (distinguished from the above as not errors)
+  uson_num_inf = 1 << json_num_special_kind_bit,
+  uson_num_zero = uson_num_inf,
   // NaN (not a number)
-  json_num_nan = 2 << json_num_special_kind_bit
+  uson_num_nan = 2 << json_num_special_kind_bit
 } json_num_special_kind_t;
 
 // -----------------------------------------------------------------------------
@@ -234,8 +257,17 @@ typedef enum json_state_e
   json_state_colon, // Expecting colon after property key
   json_state_comma, // Expecting comma after value
 
-  json_state_string, // On string
+  uson_state_verb_id, // On delimiting identifier
+
+  uson_state_data_scheme, // On scheme
+  uson_state_data_mime,   // On MIME type
+
   json_state_number, // On number
+  json_state_string, // On string
+
+  uson_state_ident, // On identifier
+  uson_state_verb,  // On verbatim string
+  uson_state_data,  // On encoded string
 
   json_state_done,
   json_state_error = json_state_done
@@ -250,7 +282,11 @@ enum
   json_flags_coll_bit = 0,
   json_flags_empty_bit = 2,
   json_flags_key_bit = 3,
-  json_flags_last_bit = 4
+  json_flags_last_bit = 4,
+
+  uson_flags_wspace_bit = 5,
+  uson_flags_coll_end_bit = 6,
+  uson_flags_config_bit = 7
 };
 
 typedef enum json_flags_e
@@ -265,7 +301,11 @@ typedef enum json_flags_e
   json_flag_key = 1 << json_flags_key_bit,
   json_flag_val = 0 << json_flags_key_bit,
   // Whether the current JSON chunk is the last one in a stream
-  json_flag_last = 1 << json_flags_last_bit
+  json_flag_last = 1 << json_flags_last_bit,
+  // Additional USON flags
+  uson_flag_wspace = 1 << uson_flags_wspace_bit,
+  uson_flag_coll_end = 1 << uson_flags_coll_end_bit,
+  uson_flag_config = 1 << uson_flags_config_bit
 } json_flags_t;
 
 // -----------------------------------------------------------------------------
@@ -301,6 +341,7 @@ typedef struct json_num_st_s
   size_t pos;
   // Its determined length
   size_t len;
+
   // Metadata collected so far
   json_num_meta_t meta;
   // Absolute exponent value
@@ -308,6 +349,30 @@ typedef struct json_num_st_s
   // Absolute mantissa value
   uintmax_t mantissa;
 } json_num_st_t;
+
+// -----------------------------------------------------------------------------
+// USON strings states
+// -----------------------------------------------------------------------------
+// Verbatim string state
+typedef struct uson_verb_st_s
+{
+  size_t pos;
+  size_t len;
+
+  u8* id;
+  size_t len_id;
+} uson_verb_st_t;
+
+// -----------------------------------------------------------------------------
+// Data string state
+typedef struct uson_data_st_s
+{
+  size_t pos;
+  size_t len;
+
+  uint scheme;
+  size_t len_mime;
+} uson_data_st_t;
 
 // =============================================================================
 // Macros
@@ -348,6 +413,16 @@ typedef struct json_num_st_s
 #define json_flags_last(flags) (((flags) & json_flag_last) != 0)
 
 // -----------------------------------------------------------------------------
+
+#define uson_flags_wspace(flags) (((flags) & uson_flag_wspace) != 0)
+#define uson_flags_wspace_coll_end(flags) (((flags) & (uson_flag_wspace | uson_flag_coll_end)) == (uson_flag_wspace | uson_flag_coll_end))
+
+#define uson_flags_config(flags) (((flags) & uson_flag_config) != 0)
+#define uson_flags_config_coll_end(flags) (((flags) & (uson_flag_config | uson_flag_coll_end)) == (uson_flag_config | uson_flag_coll_end))
+
+#define uson_flags_coll_end(flags) (((flags) & uson_flag_coll_end) != 0)
+
+// -----------------------------------------------------------------------------
 // Error condition
 // -----------------------------------------------------------------------------
 
@@ -357,6 +432,10 @@ typedef struct json_num_st_s
 #define json_error_token(jsnp) ((jsnp)->err >= JSON_ERROR_TOKEN)
 
 #define json_error_msg(jsnp) json_errors[(jsnp)->err]
+
+// -----------------------------------------------------------------------------
+
+#define uson_config(jsnp) ((jsnp)->state = uson_flag_config)
 
 // -----------------------------------------------------------------------------
 

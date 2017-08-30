@@ -6,17 +6,9 @@
 // Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
 
-#if T(PRETTY)
-  #define t_jsax_write_delim jsax_pretty_delim
-#else
-  #define t_jsax_write_delim jsax_write_delim
-#endif
-
-// -----------------------------------------------------------------------------
-
 if (true)
 {
-  t_jsax_write_delim (false);
+  #include "delimiter.c"
 
 #if T(PRETTY)
   const size_t key_space = 1u;
@@ -54,4 +46,3 @@ if (true)
 
 #undef T_PRETTY
 #undef t_eol
-#undef t_jsax_write_delim

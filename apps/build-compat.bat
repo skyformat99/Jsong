@@ -9,9 +9,7 @@ cd /d "%~dp0"
 
 :: Variables
 
-set MARCH=-march=native
 set QUANTUM=%CREATIVE%\QUANTUM
-set ULTRAVIOLET=%CREATIVE%\Ultraviolet
 set JSONG=%CREATIVE%\Jsong
 
 :: Create the build directory
@@ -27,7 +25,7 @@ if not exist build (
 
 :: C++ compatibility test
 
-g++ -mconsole %MARCH% ^
-  -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
+g++ -mconsole ^
+  -I%QUANTUM% -I%JSONG% ^
   -c compat.cpp -o build\compat.o 2> build\compat.log
 if %ERRORLEVEL% neq 0 (echo "Build error: compat.cpp" && exit /b %ERRORLEVEL%)

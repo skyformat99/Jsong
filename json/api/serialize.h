@@ -1,7 +1,7 @@
 // =============================================================================
-// <serialize.h>
+// <api/serialize.h>
 //
-// JSON serialization definitions.
+// JSON serialization private definitions.
 //
 // Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
@@ -11,7 +11,7 @@
 
 // -----------------------------------------------------------------------------
 
-#include "utils/support.h"
+#include "macros.h"
 
 // -----------------------------------------------------------------------------
 
@@ -25,14 +25,12 @@
 
 // -----------------------------------------------------------------------------
 
-#if JSON(BIG_NUMBERS)
-  #ifndef JSON_BIG_FLT_BUF_SIZE
-    #define JSON_BIG_FLT_BUF_SIZE 64u
-  #endif
+#ifndef JSON_BIG_FLT_BUF_SIZE
+  #define JSON_BIG_FLT_BUF_SIZE 64u
+#endif
 
-  #if (JSON_BIG_FLT_BUF_SIZE < 64)
-    #error "Invalid definition of `JSON_BIG_FLT_BUF_SIZE`"
-  #endif
+#if (JSON_BIG_FLT_BUF_SIZE < 64)
+  #error "Invalid definition of `JSON_BIG_FLT_BUF_SIZE`"
 #endif
 
 // -----------------------------------------------------------------------------

@@ -1,0 +1,7 @@
+{
+  key: value;
+  verbatim: (!verb
+Long string
+!verb);
+  encoded: (?base64uson:text/plain?MDEyMzQ1Njc4OQ..);
+}

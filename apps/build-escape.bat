@@ -31,7 +31,7 @@ if not exist build (
 
 gcc -O3 %MARCH% -fno-align-labels ^
   -I%QUANTUM% -I%ULTRAVIOLET% -I%JSONG% ^
-  -c %JSONG%/json/utils.c -o build\utils.o 2> build\utils.log
+  -c %JSONG%/json/utils/escape.c -o build\utils.o 2> build\utils.log
 if %ERRORLEVEL% neq 0 (echo "Build error: utils.o" && exit /b %ERRORLEVEL%)
 
 :: Build the app

@@ -23,7 +23,7 @@ if (true)
     // Assemble the complete string
     size_t sz = jsnp->used;
 
-    json_buf_grow (b, len + 1u);
+    json_buf_grow (&b, len + 1u);
     str = (json_istr_t*)b;
 
     // Get the actual string buffer pointer & length

@@ -1,13 +1,13 @@
 // =============================================================================
-// <utils/unescape/skip_simd.c>
+// <data/data.c>
 //
-// Unescape JSON string faster using SIMD.
+// USON data string handling.
 //
 // Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
 
-#if CPU(SSE42)
-  #include "skip_sse42.c"
-#elif CPU(SSE2)
-  #include "skip_sse2.c"
+#if JSON(SAX)
+  #include "sax.c"
+#else
+  #include "dom.c"
 #endif

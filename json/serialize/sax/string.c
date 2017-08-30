@@ -6,17 +6,9 @@
 // Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
 
-#if T(PRETTY)
-  #define t_jsax_write_delim jsax_pretty_delim
-#else
-  #define t_jsax_write_delim jsax_write_delim
-#endif
-
-// -----------------------------------------------------------------------------
-
 if (true)
 {
-  t_jsax_write_delim (false);
+  #include "delimiter.c"
 
   u8* pos;
   size_t len;
@@ -65,7 +57,7 @@ if (true)
   size--;
 
 partial:
-  ret = json_escape (pos, len, buf, size - 1u, &end, &sz);
+  ret = json_prefix (escape) (pos, len, buf, size - 1u, &end, &sz);
 
   buf += sz;
   size -= sz;
@@ -106,4 +98,3 @@ fail:
 
 #undef T_PRETTY
 #undef t_eol
-#undef t_jsax_write_delim

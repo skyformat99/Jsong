@@ -11,6 +11,14 @@ if (true)
   u8* p;
   size_t sz;
 
+  u8* str_buf;
+  size_t str_len;
+
+#if ENABLED(USON)
+  uson_str_verb_t* verb;
+  uson_str_data_t* data;
+#endif
+
   json_item_t* end;
   json_elmnt_t* stop = json_get_elmnt (st->root);
 
@@ -45,17 +53,37 @@ if (true)
   // Finish partial key or value string
   if (unlikely ((p = st->pos) != null))
   {
+#if ENABLED(USON)
+    if (st->verb != null)
+    {
+      verb = st->verb;
+
+      str_buf = st->pos;
+      str_len = st->len;
+
+      goto verb_continue;
+    }
+
+    if (st->data)
+    {
+      str_buf = st->pos;
+      str_len = st->len;
+
+      goto data_continue;
+    }
+#endif
+
 #if T(PRETTY)
     const size_t chrs_min = 3u;
 #else
     const size_t chrs_min = 2u;
 #endif
 
-    if (unlikely ((size_t)(e - b) < chrs_min)) goto need_space;
+    if (unlikely ((size_t)(e - b) < chrs_min)) goto needspace;
 
     u8* buf = p;
 
-    int ret = json_escape (buf, st->len, b
+    int ret = json_prefix (escape) (buf, st->len, b
     , (size_t)(e - b) - chrs_min, &p, &sz);
 
     b += sz;
@@ -67,7 +95,7 @@ if (true)
       st->pos = p;
       st->len = st->len - (size_t)(p - buf);
 
-      goto need_space;
+      goto needspace;
     }
 
     st->pos = null;
@@ -106,39 +134,250 @@ if (true)
 element_serialize:
   if (json_is_str (elmnt))
   {
-    if (unlikely ((size_t)(e - b) < 2u))
+#if ENABLED(USON)
+    // Verbatim string
+    if (uson_is_str_verb (elmnt))
     {
-      st->need = 2u - (size_t)(e - b);
-      goto need_space;
+      verb = uson_get_str_verb (elmnt);
+
+      const size_t chrs_min = 1u // '('
+      + 1u // '!'
+      + verb->id.len
+      + cstrlen (t_eol)
+      + cstrlen (t_eol)
+      + 1u // '!'
+      + verb->id.len
+      + 1u // ')'
+      ;
+
+      if (unlikely ((size_t)(e - b) < chrs_min))
+      {
+        st->need = chrs_min - (size_t)(e - b);
+        goto needspace;
+      }
+
+      b[0] = '(';
+      b[1] = '!';
+      b += 2;
+
+      json_str_copy (b, verb->id.buf, verb->id.len);
+      b += verb->id.len;
+
+      json_str_copy (b, t_eol, cstrlen (t_eol));
+      b += cstrlen (t_eol);
+
+      if (verb->data.len == 0)
+      {
+        *b++ = '!';
+
+        json_str_copy (b, verb->id.buf, verb->id.len);
+        b += verb->id.len;
+
+        *b++ = ')';
+      }
+      else
+      {
+        size_t max;
+
+        str_buf = verb->data.buf;
+        str_len = verb->data.len;
+
+verb_continue:
+        max = (size_t)(e - b) - (cstrlen (t_eol) + 2u + verb->id.len);
+        sz = min2 (str_len, max);
+
+        str_copy (b, str_buf, sz);
+
+        b += sz;
+
+        if (str_len > max)
+        {
+          st->verb = verb;
+          st->need = (str_len - max) + (cstrlen (t_eol) + 2u + verb->id.len);
+
+          st->pos = str_buf + sz;
+          st->len = str_len - sz;
+
+          goto needspace;
+        }
+
+        json_str_copy (b, t_eol, cstrlen (t_eol));
+        b += cstrlen (t_eol);
+
+        *b++ = '!';
+
+        json_str_copy (b, verb->id.buf, verb->id.len);
+        b += verb->id.len;
+
+        *b++ = ')';
+      }
     }
 
-    json_str_t str = json_get_str (elmnt);
-
-    *b++ = '"';
-
-    int ret = json_escape (str.buf, str.len, b
-    , (size_t)(e - b) - 1u, &p, &sz);
-
-    b += sz;
-
-    if (unlikely (ret != 0))
+    // Encoded data string
+    else if (uson_is_str_data (elmnt))
     {
-      st->need = (size_t)ret + 1u;
+      data = uson_get_str_data (elmnt);
 
-      st->pos = p;
-      st->len = str.len - (size_t)(p - str.buf);
+      size_t chrs_min = 1u // '('
+      + 1u // '?'
+      + 1u // ':'
+      + data->mime.len
+      + 1u // '?'
+      + 1u // ')'
+      ;
 
-      goto need_space;
+  #if T(PRETTY)
+      chrs_min = chrs_min
+      + cstrlen (t_eol)
+      - 1u // ')' (handled differently)
+      ;
+  #endif
+
+      if (unlikely ((size_t)(e - b) < chrs_min))
+      {
+        st->need = chrs_min - (size_t)(e - b);
+        goto needspace;
+      }
+
+      *b++ = '(';
+
+      if (data->mime.len != 0)
+      {
+        b[0] = '?';
+        b[1] = ':';
+        b += 2;
+
+        json_str_copy (b, data->mime.buf, data->mime.len);
+        b += data->mime.len;
+
+        *b++ = '?';
+      }
+
+  #if T(PRETTY)
+      json_str_copy (b, t_eol, cstrlen (t_eol));
+      b += cstrlen (t_eol);
+  #endif
+
+      str_buf = data->data.buf;
+      str_len = data->data.len;
+
+data_continue:
+  #if T(PRETTY)
+      // Break after every 80th character
+      if (str_len > 60u)
+      {
+        if (unlikely ((size_t)(e - b) < (80u + cstrlen (t_eol))))
+        {
+          st->data = true;
+          st->need = (80u + cstrlen (t_eol)) - (size_t)(e - b);
+
+          st->pos = str_buf;
+          st->len = str_len;
+
+          goto needspace;
+        }
+
+        // Guaranteed to succeed
+        uson_encode (str_buf, 60u, b, 80u, &p, &sz);
+
+        b += 80;
+
+        json_str_copy (b, t_eol, cstrlen (t_eol));
+        b += cstrlen (t_eol);
+
+        str_buf += 60;
+        str_len -= 60u;
+
+        goto data_continue;
+      }
+
+      // Last line
+      else
+      {
+        if (unlikely ((size_t)(e - b) < ((80u + cstrlen (t_eol)) + iw + 1u)))
+        {
+          st->data = true;
+          st->need = ((80u + cstrlen (t_eol)) + iw + 1u) - (size_t)(e - b);
+
+          st->pos = str_buf;
+          st->len = str_len;
+
+          goto needspace;
+        }
+
+        // Guaranteed to succeed
+        uson_encode (str_buf, str_len, b, 80u, &p, &sz);
+        b += sz;
+
+        json_str_copy (b, t_eol, cstrlen (t_eol));
+        b += cstrlen (t_eol);
+
+        json_str_fill (b, iw, ' ');
+        b += iw;
+
+        *b++ = ')';
+      }
+  #else // T(PRETTY) ][
+      {
+        int ret = uson_encode (str_buf, str_len, b
+        , (size_t)(e - b) - 1u, &p, &sz);
+
+        b += sz;
+
+        if (unlikely (ret != 0))
+        {
+          st->data = true;
+          st->need = (size_t)ret + 1u;
+
+          st->pos = p;
+          st->len = str_len - (size_t)(p - str_buf);
+
+          goto needspace;
+        }
+
+        *b++ = ')';
+      }
+  #endif // !T(PRETTY)
     }
 
-    *b++ = '"';
+    // Regular JSON string
+    else
+#endif
+    {
+      if (unlikely ((size_t)(e - b) < 2u))
+      {
+        st->need = 2u - (size_t)(e - b);
+        goto needspace;
+      }
+
+      json_str_t str = json_get_str (elmnt);
+
+      *b++ = '"';
+
+      int ret = json_prefix (escape) (str.buf, str.len, b
+      , (size_t)(e - b) - 1u, &p, &sz);
+
+      b += sz;
+
+      if (unlikely (ret != 0))
+      {
+        st->need = (size_t)ret + 1u;
+
+        st->pos = p;
+        st->len = str.len - (size_t)(p - str.buf);
+
+        goto needspace;
+      }
+
+      *b++ = '"';
+    }
   }
   elif (json_is_int (elmnt))
   {
     if (unlikely ((size_t)(e - b) < (1u + INTMAX_DIG)))
     {
       st->need = (1u + INTMAX_DIG) - (size_t)(e - b);
-      goto need_space;
+      goto needspace;
     }
 
     b += int_smax_to_str (b, json_get_int (elmnt));
@@ -148,7 +387,7 @@ element_serialize:
     if (unlikely ((size_t)(e - b) < UINTMAX_DIG))
     {
       st->need = UINTMAX_DIG - (size_t)(e - b);
-      goto need_space;
+      goto needspace;
     }
 
     b += int_umax_to_str (b, json_get_uint (elmnt));
@@ -163,7 +402,7 @@ element_serialize:
     if (unlikely ((size_t)(e - b) < l))
     {
       st->need = l - (size_t)(e - b);
-      goto need_space;
+      goto needspace;
     }
 
     json_str_copy (b, buf, l);
@@ -176,7 +415,7 @@ element_serialize:
     if (unlikely ((size_t)(e - b) < 2u))
     {
       st->need = 2u - (size_t)(e - b);
-      goto need_space;
+      goto needspace;
     }
 
     *b++ = '{';
@@ -196,7 +435,7 @@ element_serialize:
       if (unlikely ((size_t)(e - b) < 3u))
       {
         st->need = 3u - (size_t)(e - b);
-        goto need_space;
+        goto needspace;
       }
 
       if ((kind == json_coll_obj) && (iw != 0))
@@ -223,7 +462,7 @@ element_serialize:
       if (unlikely ((size_t)(e - b) < (1u + (iw * 2u) + isz + (cstrlen (t_eol) * 2u))))
       {
         st->need = (1u + (iw * 2u) + isz + (cstrlen (t_eol) * 2u)) - (size_t)(e - b);
-        goto need_space;
+        goto needspace;
       }
 
       if ((kind == json_coll_obj) && (iw != 0))
@@ -262,14 +501,14 @@ key_serialize:;
         st->need = chrs_min - (size_t)(e - b);
         st->key = true;
 
-        goto need_space;
+        goto needspace;
       }
 
       *b++ = '"';
 
       key = json_get_key (json_as_kv (elmnt));
 
-      int ret = json_escape (key.buf, json_hash_len (key.hash)
+      int ret = json_prefix (escape) (key.buf, json_hash_len (key.hash)
       , b, (size_t)(e - b) - (chrs_min - 1u), &p, &sz);
 
       b += sz;
@@ -282,7 +521,7 @@ key_serialize:;
         st->len = json_hash_len (key.hash) - (size_t)(p - key.buf);
         st->key = true;
 
-        goto need_space;
+        goto needspace;
       }
 
       b[0] = '"';
@@ -304,7 +543,7 @@ key_serialize:;
     if (unlikely ((size_t)(e - b) < 2u))
     {
       st->need = 2u - (size_t)(e - b);
-      goto need_space;
+      goto needspace;
     }
 
     *b++ = '[';
@@ -321,7 +560,7 @@ key_serialize:;
       if (unlikely ((size_t)(e - b) < 3u))
       {
         st->need = 3u - (size_t)(e - b);
-        goto need_space;
+        goto needspace;
       }
 
       if ((kind == json_coll_obj) && (iw != 0))
@@ -347,7 +586,7 @@ key_serialize:;
       if (unlikely ((size_t)(e - b) < (1u + (iw * 2u) + isz + (cstrlen (t_eol) * 2u))))
       {
         st->need = (1u + (iw * 2u) + isz + (cstrlen (t_eol) * 2u)) - (size_t)(e - b);
-        goto need_space;
+        goto needspace;
       }
 
       if ((kind == json_coll_obj) && (iw != 0))
@@ -385,7 +624,7 @@ key_serialize:;
       if (unlikely ((size_t)(e - b) < 4u))
       {
         st->need = 4u - (size_t)(e - b);
-        goto need_space;
+        goto needspace;
       }
 
       buf_set4 (b, 't', 'r', 'u', 'e');
@@ -397,7 +636,7 @@ key_serialize:;
       if (unlikely ((size_t)(e - b) < 5u))
       {
         st->need = 5u - (size_t)(e - b);
-        goto need_space;
+        goto needspace;
       }
 
       buf_set5 (b, 'f', 'a', 'l', 's', 'e');
@@ -410,7 +649,7 @@ key_serialize:;
     if (unlikely ((size_t)(e - b) < 4u))
     {
       st->need = 4u - (size_t)(e - b);
-      goto need_space;
+      goto needspace;
     }
 
     buf_set4 (b, 'n', 'u', 'l', 'l');
@@ -427,7 +666,7 @@ key_serialize:;
         if (unlikely ((size_t)(e - b) < (1u + INT128_DIG)))
         {
           st->need = (1u + INT128_DIG) - (size_t)(e - b);
-          goto need_space;
+          goto needspace;
         }
 
         b += int_s128_to_str (b, json_get_num_big_int (elmnt));
@@ -437,7 +676,7 @@ key_serialize:;
         if (unlikely ((size_t)(e - b) < UINT128_DIG))
         {
           st->need = UINT128_DIG - (size_t)(e - b);
-          goto need_space;
+          goto needspace;
         }
 
         b += int_u128_to_str (b, json_get_num_big_uint (elmnt));
@@ -467,7 +706,7 @@ key_serialize:;
         if (unlikely ((size_t)(e - b) < l))
         {
           st->need = l - (size_t)(e - b);
-          goto need_space;
+          goto needspace;
         }
 
         json_str_copy (b, buf, l);
@@ -484,7 +723,7 @@ key_serialize:;
       if (unlikely ((size_t)(e - b) < str.meta.len_number))
       {
         st->need = str.meta.len_number - (size_t)(e - b);
-        goto need_space;
+        goto needspace;
       }
 
       json_str_copy (b, str.buf, str.meta.len_number);
@@ -512,7 +751,7 @@ element_continue:
 #endif
     st->term = true;
 
-    goto need_space;
+    goto needspace;
   }
 
   // Next k/v pair
@@ -541,7 +780,11 @@ element_continue:
       goto element_upper;
     }
 
+#if ENABLED(USON)
+    *b++ = ';';
+#else
     *b++ = ',';
+#endif
 
 #if T(PRETTY)
     json_str_copy (b, t_eol, cstrlen (t_eol));
@@ -581,7 +824,13 @@ element_continue:
 
     elmnt = json_as_elmnt (item + 1);
 
+#if ENABLED(USON)
+  #if !T(PRETTY)
+    *b++ = ' ';
+  #endif
+#else
     *b++ = ',';
+#endif
 
 #if T(PRETTY)
     json_str_copy (b, t_eol, cstrlen (t_eol));
@@ -617,7 +866,7 @@ done:
   return true;
 
   // Not enough space in the buffer
-need_space:
+needspace:
   node.elmnt = elmnt;
   node.tag |= kind;
 

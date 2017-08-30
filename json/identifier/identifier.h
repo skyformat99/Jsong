@@ -1,15 +1,21 @@
 // =============================================================================
-// <utils/support.h>
+// <identifier/identifier.h>
+//
+// USON identifier definitions.
 //
 // Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
 
-#ifndef H_DBFC8300DDF145F987BE76745EDFF634
-#define H_DBFC8300DDF145F987BE76745EDFF634
+#ifndef H_0C6B7A4EC4C0431381FB2EEAE56CABC4
+#define H_0C6B7A4EC4C0431381FB2EEAE56CABC4
 
 // -----------------------------------------------------------------------------
 
-#define JSON(feat) (defined(JSON_##feat))
+#if JSON(STREAM)
+  #define uson_ident_init() json_buf_init (sizeof (json_istr_t))
+#else
+  #define uson_ident_init()
+#endif
 
 // -----------------------------------------------------------------------------
 

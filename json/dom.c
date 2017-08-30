@@ -13,7 +13,9 @@
 
 #define MEM_POOL_STATIC
 
+#include "api/macros.h"
 #include "api/dom.h"
+
 #include "utils/misc.h"
 
 // -----------------------------------------------------------------------------

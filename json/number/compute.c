@@ -72,7 +72,7 @@ number_as_str:
               // Allocate the number string buffer
               u8* b = jsnp->buf;
 
-              json_buf_grow (b, len + 1u);
+              json_buf_grow (&b, len + 1u);
               json_str_copy (b, buf, len);
 
               buf = b;
@@ -148,8 +148,14 @@ number_as_str:
             // Restore the fraction dot
             if (unlikely (meta.fraction))
             {
-              json_str_move_left (buf + meta.sign, buf + meta.sign + 1, lc);
-              buf[meta.sign + lc] = '.';
+  #if ENABLED(USON)
+              bint s = chr_is_sign (*buf);
+  #else
+              bint s = meta.sign;
+  #endif
+
+              json_str_move_left (buf + s, buf + s + 1, lc);
+              buf[s + lc] = '.';
             }
 
   #if JSON(SAX)
@@ -327,7 +333,7 @@ number_erange:;
 
       // Make space for the terminating null also,
       // in case if number ends up as a string
-      json_buf_grow (b, len + 1u);
+      json_buf_grow (&b, len + 1u);
       json_str_copy (b + jsnp->used, p, len);
 
       p = b;
@@ -348,7 +354,11 @@ number_erange:;
     }
 
     // Get rid of the sign
+#if ENABLED(USON)
+    p += chr_is_sign (*p);
+#else
     p += meta.sign;
+#endif
 
     // Get rid of the fraction dot
     if (unlikely (meta.fraction))

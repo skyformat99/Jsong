@@ -25,20 +25,23 @@
 #define JSON_ERROR_ESCAPE 5
 #define JSON_ERROR_UNICODE 6
 
+// USON string hexadecimal escape sequence error
+#define USON_ERROR_HEXADECIMAL 7
+
 // JSON number, boolean, or null value errors
-#define JSON_ERROR_NUMBER 7
-#define JSON_ERROR_TOKEN 8
+#define JSON_ERROR_NUMBER 8
+#define JSON_ERROR_TOKEN 9
 
 // JSON structure errors
-#define JSON_ERROR_EXPECTED_PROPERTY 9
-#define JSON_ERROR_EXPECTED_VALUE 10
-#define JSON_ERROR_EXPECTED_MORE 11
+#define JSON_ERROR_EXPECTED_PROPERTY 10
+#define JSON_ERROR_EXPECTED_VALUE 11
+#define JSON_ERROR_EXPECTED_MORE 12
 
 // -----------------------------------------------------------------------------
-// Strings
+// Globals
 // -----------------------------------------------------------------------------
 
-extern const u8* json_errors[12];
+extern const u8* json_errors[13];
 
 // -----------------------------------------------------------------------------
 

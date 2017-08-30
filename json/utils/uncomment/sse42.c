@@ -10,7 +10,11 @@ if (true)
 {
   const xi128 t = _mm_setr_epi8
   (
+#if ENABLED(USON)
+    ' ', '!', '$', '\'', ')', '.', '0', 255, 0, 0, 0, 0, 0, 0, 0, 0
+#else
     ' ', '!', '$', '.', '0', 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+#endif
   );
 
   register u32 n = (uintptr_t)j & 15u;

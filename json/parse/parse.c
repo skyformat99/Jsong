@@ -1,249 +1,22 @@
 // =============================================================================
-// <json.c>
+// <parse/parse.c>
+//
+// Parsing function template.
 //
 // Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
 
-#include <quantum/build.h>
-#include <quantum/core.h>
-
-#include <quantum/integer.h>
-#include <quantum/memory.h>
-#include <quantum/buffer.h>
-#include <quantum/character.h>
-#include <quantum/string.h>
-
-#include <utf/utf.h>
+#include "macros.h"
 
 // -----------------------------------------------------------------------------
 
-#define MEM_POOL_STATIC
-
-#include "json.h"
-
-#include "utils/misc.h"
-#include "utils/errors.h"
-
-#include "buffer/buffer.h"
-#include "string/string.h"
-#include "number/number.h"
-#include "primitive/primitive.h"
-#include "wspace/wspace.h"
-
-// -----------------------------------------------------------------------------
-
-#if (MEM_POOL_ALIGNMENT == 0) && (INTPTR_BIT <= 64)
-  #define MEM_POOL_ALIGNMENT 8u
-#endif
-
-#include <quantum/memory/pool.c>
-
-// -----------------------------------------------------------------------------
-// Auxiliary types
-// -----------------------------------------------------------------------------
-
-#if JSON(SAX)
-  typedef jsax_t jsnp_t;
-#else
-  typedef json_t jsnp_t;
+#ifndef JSON_INPLACE
+  #define JSON_INPLACE
 #endif
 
 // -----------------------------------------------------------------------------
-// State macros
-// -----------------------------------------------------------------------------
 
-#if JSON(EXPLICIT)
-  #define json_state_get() (state >> 8)
-  #define json_state_set(new) state = ((state & 0xFFu) | ((new) << 8))
-#endif
-
-// -----------------------------------------------------------------------------
-// Control flow macros
-// -----------------------------------------------------------------------------
-
-#if JSON(LINE_COL)
-  // Current character number tracking
-  #define json_track(n) jsnp->col += (size_t)(n)
-#else
-  #define json_track(n)
-#endif
-
-#if JSON(EXPLICIT)
-  // Check if there's still data available in the input
-  #define json_avail() likely (j != e)
-  // Check if the input has been parsed completely
-  #define json_done() likely (j == e)
-
-  // Check if the end of the input has been reached
-  #define json_end() unlikely (j == e)
-  // Check if the pointer would overflow the input (for SIMD code)
-  #define json_over(p, n) unlikely (((p) + (n)) >= e)
-
-  // Check if the specified number of characters is present in the input
-  #define json_peek(n) likely ((size_t)(e - j) >= (n))
-  // Check if the input lacks the specified number of characters
-  #define json_broken(n) unlikely ((size_t)(e - j) < (n))
-
-  #if JSON(STREAM)
-    // Set the number of characters the current sequence is supposed to be
-    #define json_seq(n) jsnp->need = (n)
-    // Check if this is the last input chunk
-    #define json_last() unlikely (json_flags_last (state))
-    // Request more JSON data
-    #define json_more() goto stream_end
-  #else
-    // Unused
-    #define json_seq(n)
-    // Always the last chunk
-    #define json_last() true
-    // No more data to request
-    #define json_more() json_error (JSON_ERROR_EXPECTED_MORE)
-  #endif
-
-  // Set the current parser state
-  #define json_state(s) json_state_set (s)
-
-  // Advance the specified number of characters and repeat the current state
-  #define json_continue(s, n)\
-    json_track (n);\
-    j += (n);\
-    break
-
-  // Advance the specified number of characters and break to a different state
-  #define json_break(s, n)\
-    json_state (s);\
-    json_track (n);\
-    j += (n);\
-    break
-#else
-  // The input data is available until the terminating null is reached
-  #define json_avail() true
-  // Check if the terminating null has been reached
-  #define json_done() likely (c == '\0')
-
-  // The input end isn't explicitly known
-  #define json_end() false
-  // No overflow can occur
-  #define json_over(p, n) false
-
-  // Characters are available until the null character
-  #define json_peek(n) true
-  // The sequence isn't broken, unless it has the null character in it
-  #define json_broken(n) false
-
-  // Unused
-  #define json_seq(n)
-  // Only one chunk to parse
-  #define json_last() true
-  // Unreachable
-  #define json_more()
-
-  // No state to set (jump directly)
-  #define json_state(s)
-
-  // Read the next character after the specified number of characters
-  // and repeat the current state
-  #define json_continue(s, n)\
-    json_track (n);\
-    c = j[n];\
-    j += (n);\
-    goto case_##s
-
-  // Read the next character after the specified number of characters
-  // and advance to the next state
-  #define json_break(s, n)\
-    json_track (n);\
-    c = j[n];\
-    j += (n);\
-    goto case_##s
-#endif
-
-// Default return value on stream end or error
-#if JSON(SAX)
-  #define json_return() return false
-#else
-  #define json_return() return json_node_null
-#endif
-
-// Terminate the parsing due to an unrecoverable error
-#define json_error(e) do\
-{                 \
-  jsnp->err = (e);\
-  goto error;\
-} while (0)
-
-// -----------------------------------------------------------------------------
-// RFC 7159 JSON parser implementation
-// -----------------------------------------------------------------------------
-
-#if JSON(SAX)
-  #if JSON(STREAM)
-void jsax_init_stream (jsax_t* jsnp, u8* buf, size_t size)
-  #elif JSON(EXPLICIT)
-void jsax_init (jsax_t* jsnp, u8* buf, size_t size)
-  #else
-void jsax_initi (jsax_t* jsnp, u8* buf, size_t size)
-  #endif
-#else
-  #if JSON(STREAM)
-void json_init_stream (json_t* jsnp, mem_pool_t* pool)
-  #elif JSON(EXPLICIT)
-void json_init (json_t* jsnp, mem_pool_t* pool)
-  #else
-void json_initi (json_t* jsnp, mem_pool_t* pool)
-  #endif
-#endif
-{
-  static const jsnp_t jsnp_zero;
-
-  *jsnp = jsnp_zero;
-
-#if JSON(LINE_COL)
-  jsnp->line = 1u;
-  jsnp->col  = 1u;
-#endif
-
-#if JSON(SAX)
-  jsnp->buf  = buf;
-  jsnp->size = size;
-
-  jsnp->on_start = jsax_start_trap;
-  jsnp->on_key   = jsax_key_trap;
-  jsnp->on_str   = jsax_str_trap;
-  jsnp->on_num   = jsax_num_trap;
-  jsnp->on_int   = jsax_int_trap;
-  jsnp->on_flt   = jsax_flt_trap;
-  jsnp->on_bool  = jsax_bool_trap;
-  jsnp->on_null  = jsax_null_trap;
-  jsnp->on_end   = jsax_end_trap;
-
-  #if JSON(STREAM)
-    jsnp->on_mem = jsax_mem_trap;
-  #endif
-#else
-  jsnp->pool = pool;
-#endif
-}
-
-// -----------------------------------------------------------------------------
-
-#if JSON(SAX)
-  #if JSON(STREAM)
-bool jsax_parse_stream (jsax_t* jsnp, u8* json, size_t size, bool last)
-  #elif JSON(EXPLICIT)
-bool jsax_parse (jsax_t* jsnp, u8* json, size_t size)
-  #else
-bool jsax_parsei (jsax_t* jsnp, u8* json)
-  #endif
-#else
-  #if JSON(STREAM)
-json_node_t json_parse_stream (json_t* jsnp, u8* json, size_t size, bool last)
-  #elif JSON(EXPLICIT)
-json_node_t json_parse (json_t* jsnp, u8* json, size_t size)
-  #else
-json_node_t json_parsei (json_t* jsnp, u8* json)
-  #endif
-#endif
+if (true)
 {
   // Prevent the parser restart without initializing
   // it again after parsing the previous input
@@ -259,10 +32,13 @@ json_node_t json_parsei (json_t* jsnp, u8* json)
   const u8* e;
 #endif
 
-  // Get the parser state and flags
 #if JSON(STREAM)
+  // Get the parser state and flags
   json_state_t state = jsnp->state;
-  state |= last << json_flags_last_bit;
+  state |= (json_state_t)last << json_flags_last_bit;
+#elif ENABLED(USON)
+  // The configuration flag might be set
+  json_state_t state = jsnp->state;
 #elif JSON(EXPLICIT)
   json_state_t state = json_state_root;
 #else
@@ -270,14 +46,13 @@ json_node_t json_parsei (json_t* jsnp, u8* json)
 #endif
 
   // Parsing loop
-  while (json_avail())
+  while (json_access())
   {
   // Get the next character
   register uint c = *j;
 
-  // GCC compiles this switch into the jump table
-  // when it's not optimized away
 #if JSON(EXPLICIT)
+  // GCC compiles this switch into the jump table
   switch (json_state_get())
 #else
   switch (json_state_root)
@@ -290,9 +65,10 @@ case_json_state_key:
     // Whitespace
     if (likely (json_wspace (c)))
     {
-      #include "wspace/wspace.c"
+      #include "../wspace/wspace.c"
     }
 
+root_key:
     // String
     if (likely (c == '"'))
     {
@@ -309,15 +85,44 @@ case_json_state_key:
       json_break (json_state_string, 1u);
     }
 
-    // Empty object
-    if (unlikely ((c == '}') && (json_flags_obj_empty (state))))
+    // Object end
+    if (unlikely ((c == '}')
+#if !ENABLED(USON)
+    // JSON object must be empty to end like that
+    && (json_flags_obj_empty (state))
+#endif
+    ))
     {
       json_state (json_state_comma);
       goto object_end;
     }
 
+#if ENABLED(USON)
+    // Check for configuration end
+    if (uson_flags_config (state))
+    {
+      if (json_last())
+      {
+        if (json_done()) goto config_end;
+      }
+    }
+
+    // Unquoted identifier string
+    uson_ident_init();
+
+  #if JSON(STREAM)
+    jsnp->st.str.pos = j - json;
+  #endif
+
+    state |= json_flag_key;
+
+    json_state (uson_state_ident);
+
+    goto case_uson_state_ident;
+#else
     // Unexpected token
     json_error (JSON_ERROR_EXPECTED_PROPERTY);
+#endif
 
     // Unreachable
     assume_unreachable();
@@ -330,13 +135,36 @@ case_json_state_colon:
     // Whitespace
     if (unlikely (json_wspace (c)))
     {
-      #define T_NOSIMD
+#if ENABLED(USON)
+      state |= uson_flag_wspace;
+#endif
 
-      #include "wspace/wspace.c"
+      #define NO_SIMD
+
+      #include "../wspace/wspace.c"
     }
 
     // Check if colon is present
-    if (likely (c == ':')) json_break (json_state_value, 1u);
+    if (likely (c == ':'))
+    {
+#if ENABLED(USON)
+      state = flag_clr (state, uson_flag_wspace);
+#endif
+
+      json_break (json_state_value, 1u);
+    }
+
+#if ENABLED(USON)
+    // USON object and array opening bracket is allowed to consume
+    // the preceding colon if there was whitespace in-between
+    if (uson_flags_wspace (state))
+    {
+      state = flag_clr (state, uson_flag_wspace);
+
+      if (likely (c == '{')) goto object_start;
+      if (likely (c == '[')) goto array_start;
+    }
+#endif
 
     // Unexpected token
     json_error (JSON_ERROR_EXPECTED_VALUE);
@@ -359,14 +187,14 @@ case_json_state_string:
     // Skip the part of string without escape sequences.
     // Good for object property keys.
 #if CPU(SSE2)
-    #include "string/skip_simd.c"
+    #include "../string/skip/simd.c"
 #else
     while (json_peek (4u))
     {
-      if (unlikely (!json_str_tbl[c])) break;
-      if (unlikely (!json_str_tbl[j[1]])) {c = j[1]; j++; break;}
-      if (unlikely (!json_str_tbl[j[2]])) {c = j[2]; j += 2; break;}
-      if (unlikely (!json_str_tbl[j[3]])) {c = j[3]; j += 3; break;}
+      if (unlikely (!json_prefix (str_tbl) (c))) break;
+      if (unlikely (!json_prefix (str_tbl) (j[1]))) {c = j[1]; j++; break;}
+      if (unlikely (!json_prefix (str_tbl) (j[2]))) {c = j[2]; j += 2; break;}
+      if (unlikely (!json_prefix (str_tbl) (j[3]))) {c = j[3]; j += 3; break;}
 
       c = j[4];
       j += 4;
@@ -391,6 +219,56 @@ loop (string);
       // See what kind of escape sequence it is
       c = j[1];
 
+#if ENABLED(USON)
+      // Hexadecimal escape sequence
+      if (unlikely (c == 'x'))
+      {
+        if (json_broken (4u))
+        {
+          json_seq (4u);
+          goto string_end;
+        }
+
+        // Decode the byte
+  #if JSON(EXPLICIT)
+        uint x;
+
+        uint d = chr_xdig_to_int (j[2]);
+        c = d << 4;
+        x = d;
+
+        d = chr_xdig_to_int (j[3]);
+        c |= d;
+        x |= d;
+
+        if (unlikely (x > 0xFu))
+        {
+          json_track (j - p);
+          json_error (USON_ERROR_HEXADECIMAL);
+        }
+  #else
+        uint d = chr_xdig_to_int (j[2]);
+        if (unlikely (d > 0xFu)) goto error_hex;
+        c |= d << 4;
+
+        d = chr_xdig_to_int (j[3]);
+
+        if (unlikely (d > 0xFu))
+        {
+error_hex:
+          json_track (j - p);
+          json_error (USON_ERROR_HEXADECIMAL);
+        }
+
+        c |= d;
+  #endif
+
+        *o++ = c;
+        j += 4;
+      }
+
+#else // USON ][
+
       // Unicode escape sequence
       if (unlikely (c == 'u'))
       {
@@ -401,7 +279,7 @@ loop (string);
         }
 
         // Decode the UTF-16 character
-#if JSON(EXPLICIT)
+  #if JSON(EXPLICIT)
         uint x;
 
         uint u = chr_xdig_to_int (j[2]);
@@ -421,7 +299,7 @@ loop (string);
         x |= u;
 
         if (unlikely (x > 0xFu)) goto error_unicode;
-#else
+  #else
         uint u = chr_xdig_to_int (j[2]);
         if (unlikely (u > 0xFu)) goto error_unicode;
         c = u << 12;
@@ -437,7 +315,7 @@ loop (string);
         u = chr_xdig_to_int (j[5]);
         if (unlikely (u > 0xFu)) goto error_unicode;
         c |= u;
-#endif
+  #endif
 
         // 1 UTF-8 byte
         if (likely (utf16_chr_is8_lead1 (c)))
@@ -476,7 +354,7 @@ loop (string);
           // Decode the low surrogate UTF-16 character
           uint s;
 
-#if JSON(EXPLICIT)
+  #if JSON(EXPLICIT)
           if (unlikely (!buf_equ2 (j + 6, '\\', 'u'))) goto error_unicode;
 
           u = chr_xdig_to_int (j[8]);
@@ -496,7 +374,7 @@ loop (string);
           x |= u;
 
           if (unlikely (x > 0xFu)) goto error_unicode;
-#else
+  #else
           if (unlikely ((j[6] != '\\') || (j[7] != 'u'))) goto error_unicode;
 
           u = chr_xdig_to_int (j[8]);
@@ -514,7 +392,7 @@ loop (string);
           u = chr_xdig_to_int (j[11]);
           if (unlikely (u > 0xFu)) goto error_unicode;
           s |= u;
-#endif
+  #endif
 
           // Check if it's actually a low surrogate character
           if (unlikely (!utf16_chr_is_surr_low (s))) goto error_unicode;
@@ -539,12 +417,13 @@ error_unicode:
           json_error (JSON_ERROR_UNICODE);
         }
       }
+#endif // !USON
 
       // Character escape sequence
       else
       {
         // Unescape the character using the lookup table
-        c = json_chr_unescape (c);
+        c = json_prefix (chr_unescape) (c);
 
         // Check if the escape sequence is valid
         if (unlikely (c > 0x7Fu))
@@ -560,10 +439,14 @@ error_unicode:
     }
 
     // Check if the character is a valid JSON string character
+#if ENABLED(USON)
+    else if (likely (chr_is_print_strict (c)))
+#else
     else if (likely (chr_is_print (c)))
+#endif
     {
       // Include the SIMD processing code path
-      #include "string/simd.c"
+      #include "../string/simd.c"
 
       *o++ = c;
       j++;
@@ -589,7 +472,7 @@ string_done:
     j++;
     json_track (j - p);
 
-    #include "string/string.c"
+    #include "../string/string.c"
 
     json_break (json_state_comma, 0);
 
@@ -617,30 +500,81 @@ case_json_state_comma:
     // Whitespace
     if (likely (json_wspace (c)))
     {
-      #include "wspace/wspace.c"
+#if ENABLED(USON)
+      state |= uson_flag_wspace;
+#endif
+
+      #include "../wspace/wspace.c"
     }
 
     // Object
     if (likely (json_flags_obj (state)))
     {
-      // Next key / value pair
+#if !ENABLED(USON)
+      // Next property
       if (likely (c == ','))
       {
-        #include "object/grow.c"
+        #include "../object/grow.c"
 
         state = flag_clr (state, json_flag_empty);
 
         json_break (json_state_key, 1u);
       }
+#endif
 
       // Object end
       if (unlikely (c == '}'))
       {
 object_end:
-        #include "object/end.c"
+        #include "../object/end.c"
+
+#if ENABLED(USON)
+        state = flag_clr (state, uson_flag_wspace) | uson_flag_coll_end;
+#endif
 
         json_continue (json_state_comma, 1u);
       }
+
+#if ENABLED(USON)
+      // USON object properties are separated by semicolons
+      if (likely (c == ';'))
+      {
+        #include "../object/grow.c"
+
+        state = flag_clr (state, json_flag_empty | uson_flag_wspace | uson_flag_coll_end);
+
+        json_break (json_state_key, 1u);
+      }
+
+      // USON object and array closing bracket is allowed to consume semicolons.
+      // But if there is a property that follows it must additionally be separated
+      // by some whitespace.
+      if (unlikely (uson_flags_wspace_coll_end (state)))
+      {
+        #include "../object/grow.c"
+
+        state = flag_clr (state, json_flag_empty | uson_flag_wspace | uson_flag_coll_end);
+
+        json_state (json_state_key);
+
+        goto root_key;
+      }
+
+      // UCFG end
+      if (unlikely (uson_flags_config_coll_end (state)))
+      {
+        if (json_last())
+        {
+          if (json_done())
+          {
+            #define USON_CONFIG
+
+config_end:
+            #include "../object/end.c"
+          }
+        }
+      }
+#endif
 
       // Unexpected token
       json_error (JSON_ERROR_EXPECTED_VALUE);
@@ -649,24 +583,44 @@ object_end:
     // Array
     if (likely (json_flags_arr (state)))
     {
+#if !ENABLED(USON)
       // Next item
       if (likely (c == ','))
       {
-        #include "array/grow.c"
+        #include "../array/grow.c"
 
         state = flag_clr (state, json_flag_empty);
 
         json_break (json_state_value, 1u);
       }
+#endif
 
       // Array end
       if (unlikely (c == ']'))
       {
 array_end:
-        #include "array/end.c"
+        #include "../array/end.c"
+
+#if ENABLED(USON)
+        state = flag_clr (state, uson_flag_wspace) | uson_flag_coll_end;
+#endif
 
         json_continue (json_state_comma, 1u);
       }
+
+#if ENABLED(USON)
+      // USON array items are separated simply by whitespace
+      if (likely (uson_flags_wspace (state)))
+      {
+        #include "../array/grow.c"
+
+        state = flag_clr (state, json_flag_empty | uson_flag_wspace | uson_flag_coll_end);
+
+        json_state (json_state_value);
+
+        goto root_value;
+      }
+#endif
 
       // Unexpected token
       json_error (JSON_ERROR_EXPECTED_VALUE);
@@ -677,7 +631,7 @@ array_end:
     {
       if (json_done())
       {
-        #include "root/end.c"
+        #include "../root/end.c"
       }
     }
 
@@ -695,10 +649,10 @@ case_json_state_value:
     // Whitespace
     if (likely (json_wspace (c)))
     {
-      #include "wspace/wspace.c"
+      #include "../wspace/wspace.c"
     }
 
-case_json_state_value_root:
+root_value:
     // String
     if (likely (c == '"'))
     {
@@ -714,9 +668,10 @@ case_json_state_value_root:
     // Object
     if (unlikely (c == '{'))
     {
-      #include "object/start.c"
+object_start:
+      #include "../object/start.c"
 
-#if JSON(STREAM)
+#if ENABLED(USON) || JSON(STREAM)
       state = flag_clr (state, json_flag_arr) | json_flag_empty;
 #else
       state = json_flag_empty;
@@ -728,9 +683,10 @@ case_json_state_value_root:
     // Array
     if (unlikely (c == '['))
     {
-      #include "array/start.c"
+array_start:
+      #include "../array/start.c"
 
-#if JSON(STREAM)
+#if ENABLED(USON) || JSON(STREAM)
       state = flag_clr (state, json_flag_arr) | json_flag_arr | json_flag_empty;
 #else
       state = json_flag_arr | json_flag_empty;
@@ -739,6 +695,7 @@ case_json_state_value_root:
       json_break (json_state_value, 1u);
     }
 
+#if !ENABLED(USON)
     // Boolean true
     if (unlikely (c == 't'))
     {
@@ -748,11 +705,11 @@ case_json_state_value_root:
         json_more();
       }
 
-#if JSON(EXPLICIT)
+  #if JSON(EXPLICIT)
       if (likely (buf_equ4 (j, 't', 'r', 'u', 'e')))
-#else
+  #else
       if (likely ((j[1] == 'r') && (j[2] == 'u') && (j[3] == 'e')))
-#endif
+  #endif
       {
         json_bool_evnt (true);
         json_break (json_state_comma, 4u);
@@ -770,11 +727,11 @@ case_json_state_value_root:
         json_more();
       }
 
-#if JSON(EXPLICIT)
+  #if JSON(EXPLICIT)
       if (likely (buf_equ4 (j + 1, 'a', 'l', 's', 'e')))
-#else
+  #else
       if (likely ((j[1] == 'a') && (j[2] == 'l') && (j[3] == 's') && (j[4] == 'e')))
-#endif
+  #endif
       {
         json_bool_evnt (false);
         json_break (json_state_comma, 5u);
@@ -792,11 +749,11 @@ case_json_state_value_root:
         json_more();
       }
 
-#if JSON(EXPLICIT)
+  #if JSON(EXPLICIT)
       if (likely (buf_equ4 (j, 'n', 'u', 'l', 'l')))
-#else
+  #else
       if (likely ((j[1] == 'u') && (j[2] == 'l') && (j[3] == 'l')))
-#endif
+  #endif
       {
         json_null_evnt();
         json_break (json_state_comma, 4u);
@@ -805,8 +762,72 @@ case_json_state_value_root:
       json_error (JSON_ERROR_TOKEN);
     }
 
-    // Empty array
-    if (unlikely ((c == ']') && (json_flags_arr_empty (state))))
+#else // !USON ][
+
+    // USON string
+    if (unlikely (c == '('))
+    {
+      if (json_broken (2u))
+      {
+        json_seq (2u);
+        json_more();
+      }
+
+      c = j[1];
+
+      // Verbatim string
+      if (likely (c == '!'))
+      {
+        uson_verb_init();
+        uson_verb_id_init();
+
+  #if JSON(STREAM)
+        jsnp->st.verb.pos = (size_t)(j - json) + 2u;
+  #endif
+
+        // Parse the delimiting identifier now
+        json_break (uson_state_verb_id, 2u);
+      }
+
+      // Encoded data string with metadata
+      if (unlikely (c == '?'))
+      {
+        uson_data_init();
+        uson_data_scheme_init();
+
+  #if JSON(STREAM)
+        jsnp->st.data.pos = (size_t)(j - json) + 2u;
+  #endif
+
+        // Parse the metadata now
+        json_break (uson_state_data_scheme, 2u);
+      }
+
+      // Encoded data string without metadata
+      // (default Base64 USON encoding without MIME type)
+      uson_data_init();
+      uson_data_str_init();
+
+      j++;
+
+  #if JSON(STREAM)
+      jsnp->st.data.pos = j - json;
+  #endif
+      jsnp->st.data.scheme = 0;
+
+      json_state (uson_state_data);
+
+      goto case_uson_state_data;
+    }
+#endif // USON
+
+    // Array end
+    if (unlikely ((c == ']')
+#if !ENABLED(USON)
+    // JSON array must be empty to end like that
+    && (json_flags_arr_empty (state))
+#endif
+    ))
     {
       json_state (json_state_comma);
       goto array_end;
@@ -850,8 +871,12 @@ else
     p = j;
     r = j;
 
-    // Check for negative sign
+    // Check for sign
+#if ENABLED(USON)
+    if (unlikely (chr_is_sign (c)))
+#else
     if (unlikely (c == '-'))
+#endif
     {
       if (json_broken (2u))
       {
@@ -859,16 +884,20 @@ else
         json_more();
       }
 
+#if ENABLED(USON)
+      meta.sign = c >> 2;
+#else
       meta.sign = true;
+#endif
 
-      c = j[1];
-      r = ++j;
+      c = *++j;
+      r = j;
     }
 
     // Set the number state
 #if JSON(STREAM)
     json_state (json_state_number);
-    jsnp->st.num.pos = (size_t)(p - json);
+    jsnp->st.num.pos = p - json;
 #endif
 
     d = chr_dig_to_int (c);
@@ -922,20 +951,34 @@ cardinal32_done:
     lc = meta.len_cardinal + (size_t)(j - r);
     meta.len_cardinal = lc;
   #else
-    lc = (size_t)(j - r);
+    lc = j - r;
 
     #if JSON(STRING_NUMBERS)
       meta.len_cardinal = lc;
     #endif
   #endif
 
-    if (unlikely (lc == 0)) json_error (JSON_ERROR_TOKEN);
+    if (unlikely (lc == 0))
+    {
+  #if ENABLED(USON)
+      if (unlikely (c != '.')) goto ident_from_number;
+  #else
+      json_error (JSON_ERROR_TOKEN);
+  #endif
+    }
 
   #if JSON(STRING_NUMBERS)
-    if (unlikely (meta.reserved && (lc != 1u))) json_error (JSON_ERROR_NUMBER);
+    if (unlikely (meta.reserved && (lc != 1u)))
   #else
-    if (unlikely ((mi32 == 0) && (lc != 1u))) json_error (JSON_ERROR_NUMBER);
+    if (unlikely ((mi32 == 0) && (lc != 1u)))
   #endif
+    {
+  #if ENABLED(USON)
+      goto ident_from_number;
+  #else
+      json_error (JSON_ERROR_NUMBER);
+  #endif
+    }
 
     if (unlikely (c == '.'))
     {
@@ -976,20 +1019,27 @@ fraction32_done:
       lf = meta.len_fraction + (size_t)(j - r);
       meta.len_fraction = lf;
   #else
-      lf = (size_t)(j - r);
+      lf = j - r;
 
     #if JSON(STRING_NUMBERS)
       meta.len_fraction = lf;
     #endif
   #endif
 
-      if (unlikely (lf == 0)) json_error (JSON_ERROR_NUMBER);
+      if (unlikely (lf == 0))
+      {
+  #if ENABLED(USON)
+        if (unlikely ((lc == 0) || (chr_is_exp (c)))) goto ident_from_number;
+  #else
+        json_error (JSON_ERROR_NUMBER);
+  #endif
+      }
     }
 
     mi = mi32;
 
     goto exponent;
-#endif
+#endif // CPU(32BIT)
 
     // Cardinal ----------------------------------------------------------------
 
@@ -1015,7 +1065,7 @@ cardinal_continue:
 cardinal_end:
 #if JSON(EXPLICIT)
   #if JSON(STREAM)
-    d = (size_t)(j - r);
+    d = j - r;
     lc = meta.len_cardinal + d;
 
     if (unlikely ((d > JSON_NUM_MANT_LEN_MAX)
@@ -1023,7 +1073,7 @@ cardinal_end:
 
     meta.len_cardinal = lc;
   #else
-    lc = (size_t)(j - r);
+    lc = j - r;
 
     #if JSON(STRING_NUMBERS)
       if (unlikely (lc > JSON_NUM_MANT_LEN_MAX)) json_error (JSON_ERROR_MEMORY);
@@ -1033,13 +1083,20 @@ cardinal_end:
 
     if (json_last())
     {
-      // Check if cardinal number starts with a zero decimal digit
+      // Check if cardinal part starts with a zero decimal digit
       // and is not itself a zero
   #if JSON(STRING_NUMBERS)
-      if (unlikely (meta.reserved && (lc != 1u))) json_error (JSON_ERROR_NUMBER);
+      if (unlikely (meta.reserved && (lc != 1u)))
   #else
-      if (unlikely ((mi == 0) && (lc != 1u))) json_error (JSON_ERROR_NUMBER);
+      if (unlikely ((mi == 0) && (lc != 1u)))
   #endif
+      {
+  #if ENABLED(USON)
+        goto ident_done;
+  #else
+        json_error (JSON_ERROR_NUMBER);
+  #endif
+      }
 
       goto number_done;
     }
@@ -1050,7 +1107,7 @@ cardinal_end:
     // Cardinal part has ended
 cardinal_done:
 #if JSON(STREAM)
-    d = (size_t)(j - r);
+    d = j - r;
     lc = meta.len_cardinal + d;
 
     if (unlikely ((d > JSON_NUM_MANT_LEN_MAX)
@@ -1058,7 +1115,7 @@ cardinal_done:
 
     meta.len_cardinal = lc;
 #else
-    lc = (size_t)(j - r);
+    lc = j - r;
 
   #if JSON(STRING_NUMBERS)
     if (unlikely (lc > JSON_NUM_MANT_LEN_MAX)) json_error (JSON_ERROR_MEMORY);
@@ -1067,14 +1124,28 @@ cardinal_done:
 #endif
 
     // Check for empty cardinal part
-    if (unlikely (lc == 0)) json_error (JSON_ERROR_TOKEN);
+    if (unlikely (lc == 0))
+    {
+#if ENABLED(USON)
+      if (unlikely (c != '.')) goto ident_from_number;
+#else
+      json_error (JSON_ERROR_TOKEN);
+#endif
+    }
 
     // Check if leading zero is followed by a decimal digit
 #if JSON(STRING_NUMBERS)
-    if (unlikely (meta.reserved && (lc != 1u))) json_error (JSON_ERROR_NUMBER);
+    if (unlikely (meta.reserved && (lc != 1u)))
 #else
-    if (unlikely ((mi == 0) && (lc != 1u))) json_error (JSON_ERROR_NUMBER);
+    if (unlikely ((mi == 0) && (lc != 1u)))
 #endif
+    {
+#if ENABLED(USON)
+      goto ident_from_number;
+#else
+      json_error (JSON_ERROR_NUMBER);
+#endif
+    }
 
     // Fraction ----------------------------------------------------------------
 
@@ -1107,7 +1178,7 @@ fraction_continue:
 fraction_end:
 #if JSON(EXPLICIT)
   #if JSON(STREAM)
-      d = (size_t)(j - r);
+      d = j - r;
       lf = meta.len_fraction + d;
 
       if (unlikely ((d > JSON_NUM_MANT_LEN_MAX)
@@ -1115,7 +1186,7 @@ fraction_end:
 
       meta.len_fraction = lf;
   #else
-      lf = (size_t)(j - r);
+      lf = j - r;
 
     #if JSON(STRING_NUMBERS)
       if (unlikely (lf > JSON_NUM_MANT_LEN_MAX)) json_error (JSON_ERROR_MEMORY);
@@ -1126,7 +1197,15 @@ fraction_end:
       if (json_last())
       {
         // Check if number ends with a dot
-        if (unlikely (lf == 0)) json_error (JSON_ERROR_EXPECTED_MORE);
+        if (unlikely (lf == 0))
+        {
+  #if ENABLED(USON)
+          if (unlikely ((lc == 0) || (chr_is_exp (c)))) goto ident_done;
+  #else
+          json_error (JSON_ERROR_EXPECTED_MORE);
+  #endif
+        }
+
         goto number_done;
       }
 
@@ -1136,7 +1215,7 @@ fraction_end:
       // Fractional part has ended
 fraction_done:
 #if JSON(STREAM)
-      d = (size_t)(j - r);
+      d = j - r;
       lf = meta.len_fraction + d;
 
       if (unlikely ((d > JSON_NUM_MANT_LEN_MAX)
@@ -1144,7 +1223,7 @@ fraction_done:
 
       meta.len_fraction = lf;
 #else
-      lf = (size_t)(j - r);
+      lf = j - r;
 
   #if JSON(STRING_NUMBERS)
       if (unlikely (lf > JSON_NUM_MANT_LEN_MAX)) json_error (JSON_ERROR_MEMORY);
@@ -1153,7 +1232,14 @@ fraction_done:
 #endif
 
       // Check for empty fractional part
-      if (unlikely (lf == 0)) json_error (JSON_ERROR_NUMBER);
+      if (unlikely (lf == 0))
+      {
+#if ENABLED(USON)
+        if (unlikely ((lc == 0) || (chr_is_exp (c)))) goto ident_from_number;
+#else
+        json_error (JSON_ERROR_NUMBER);
+#endif
+      }
     }
 
     // Exponent ----------------------------------------------------------------
@@ -1209,16 +1295,16 @@ exponent_continue:
 exponent_end:
 #if JSON(EXPLICIT)
   #if JSON(STREAM)
-      d = (size_t)(j - r);
+      d = j - r;
       le = meta.len_number + d;
 
       if (unlikely ((d > JSON_NUM_EXP_LEN_MAX)
       || (le > JSON_NUM_EXP_LEN_MAX))) json_error (JSON_ERROR_MEMORY);
 
-      // Temporal exponent storage
+      // Temporal exponent length storage
       meta.len_number = le;
   #else
-      le = (size_t)(j - r);
+      le = j - r;
 
       if (unlikely (le > JSON_NUM_EXP_LEN_MAX)) json_error (JSON_ERROR_MEMORY);
   #endif
@@ -1226,7 +1312,15 @@ exponent_end:
       if (json_last())
       {
         // Check if exponential part ends without any decimal digits
-        if (unlikely (le == 0)) json_error (JSON_ERROR_NUMBER);
+        if (unlikely (le == 0))
+        {
+  #if ENABLED(USON)
+          goto ident_done;
+  #else
+          json_error (JSON_ERROR_NUMBER);
+  #endif
+        }
+
         goto number_done;
       }
 
@@ -1236,19 +1330,26 @@ exponent_end:
       // Exponential part has ended
 exponent_done:
 #if JSON(STREAM)
-      d = (size_t)(j - r);
+      d = j - r;
       le = meta.len_number + d;
 
       if (unlikely ((d > JSON_NUM_EXP_LEN_MAX)
       || (le > JSON_NUM_EXP_LEN_MAX))) json_error (JSON_ERROR_MEMORY);
 #else
-      le = (size_t)(j - r);
+      le = j - r;
 
       if (unlikely (le > JSON_NUM_EXP_LEN_MAX)) json_error (JSON_ERROR_MEMORY);
 #endif
 
       // Check for empty exponential part
-      if (unlikely (le == 0)) json_error (JSON_ERROR_NUMBER);
+      if (unlikely (le == 0))
+      {
+#if ENABLED(USON)
+        goto ident_from_number;
+#else
+        json_error (JSON_ERROR_NUMBER);
+#endif
+      }
     }
 
     // Finale ------------------------------------------------------------------
@@ -1256,8 +1357,9 @@ exponent_done:
 number_done:
     json_track (j - p);
 
-    #include "number/number.c"
+    #include "../number/number.c"
 
+    // The next character is already read
     json_state (json_state_comma);
 
     goto case_json_state_comma;
@@ -1268,7 +1370,7 @@ number_end:;
     json_track (j - p);
 
   #if JSON(STREAM)
-    jsnp->st.num.len = (size_t)(j - p);
+    jsnp->st.num.len = j - p;
     jsnp->st.num.meta = meta;
 
     #if !JSON(STRING_NUMBERS)
@@ -1279,6 +1381,63 @@ number_end:;
 
     json_more();
 #endif
+
+// -----------------------------------------------------------------------------
+
+#if ENABLED(USON)
+
+// -----------------------------------------------------------------------------
+// Identifier
+case uson_state_ident:
+case_uson_state_ident:
+    // Identifier start
+    p = j;
+
+loop (ident);
+    // A number that has failed to parse due to *syntactic* errors
+    // is promoted (or demoted, if one wishes) to an identifier
+ident_from_number:
+
+    // Check for identifier end
+    if (unlikely (!uson_chr_ident (c))) goto ident_done;
+
+    // Check for input end
+    j++;
+
+    if (json_end()) goto ident_end;
+
+    // Get the next identifier character
+    c = *j;
+
+    repeat (ident);
+
+    // Save the identifier
+ident_done:
+    json_track (j - p);
+
+    #include "../identifier/identifier.c"
+
+ident_special:
+    // The next character is already read
+    json_state (json_state_comma);
+
+    goto case_json_state_comma;
+
+    // Save the identifier state
+ident_end:;
+#if JSON(EXPLICIT)
+    json_track (j - p);
+
+  #if JSON(STREAM)
+    jsnp->st.str.len = j - p;
+  #endif
+
+    json_more();
+#endif
+
+// -----------------------------------------------------------------------------
+
+#endif // USON
 
 // -----------------------------------------------------------------------------
 // Restart number parsing
@@ -1321,16 +1480,481 @@ case_json_state_number:
     break;
 
 // -----------------------------------------------------------------------------
+
+#if ENABLED(USON)
+
+// -----------------------------------------------------------------------------
+// Verbatim string
+// -----------------------------------------------------------------------------
+// Delimiting identifier
+case uson_state_verb_id:
+case_uson_state_verb_id:
+{
+    const u8* p = j;
+
+loop (id);
+    if (unlikely (!uson_chr_verb_id (c))) goto id_done;
+
+    j++;
+
+    if (json_end()) goto id_end;
+
+    c = *j;
+
+    repeat (id);
+
+    // Save the delimiting identifier string
+id_done:
+    if (unlikely (c != '\n')) json_error (JSON_ERROR_TOKEN);
+
+    json_track (j - p);
+
+    #include "../verbatim/id/id.c"
+
+    // Initialize the verbatim string buffer
+    uson_verb_str_init();
+
+#if JSON(STREAM)
+    jsnp->st.verb.pos = j - json;
+#endif
+
+    json_state (uson_state_verb);
+
+    goto case_uson_state_verb;
+
+    // Save the delimiting identifier string state
+id_end:
+#if JSON(EXPLICIT)
+    json_track (j - p);
+
+  #if JSON(STREAM)
+    jsnp->st.verb.len = j - p;
+  #endif
+
+    json_more();
+#endif
+
+    // Unreachable
+    assume_unreachable();
+    break;
+}
+
+// -----------------------------------------------------------------------------
+// String itself
+case uson_state_verb:
+case_uson_state_verb:
+{
+    const u8* p = j;
+
+#if JSON(LINE_COL)
+    const u8* q = j;
+#endif
+
+    // Get the saved identifier length
+    size_t l = jsnp->st.verb.len_id;
+
+loop (verb);
+    // Include the SIMD processing code path
+    #include "../verbatim/simd.c"
+
+verb_scalar:
+    if (unlikely (!uson_chr_verb (c))) goto verb_done;
+
+    j++;
+
+verb_continue:
+    if (json_end()) goto verb_end;
+
+    c = *j;
+
+    repeat (verb);
+
+    // Save the verbatim string
+verb_done:
+    if (unlikely (c != '\n')) json_error (JSON_ERROR_TOKEN);
+
+    // Check if delimiting identifier is available for comparison
+    if (json_broken (2u + l + 1u))
+    {
+      json_seq (2u + l + 1u);
+      goto verb_end;
+    }
+
+#if JSON(LINE_COL)
+    // Reset the current character number
+    q = j + 1;
+
+    jsnp->line++;
+    jsnp->col = 1u;
+#endif
+
+    // New line must be followed by an exclamation mark,
+    // or it's not an ending
+    if (j[1] != '!')
+    {
+      j += 2;
+      goto verb_continue;
+    }
+
+    // Delimiting identifiers must match exactly (case-sensitively),
+    // or it's not an ending
+#if JSON(EXPLICIT)
+    if (!json_str_equal (j + 2, jsnp->st.verb.id, l))
+#else
+    if (!json_stri_nequal (j + 2, jsnp->st.verb.id, l))
+#endif
+    {
+      j += 2;
+      goto verb_continue;
+    }
+
+    // Finally, delimiting identifier must be followed
+    // by a closing round bracket
+    if (j[2 + l] != ')')
+    {
+      j += 2 + l;
+      goto verb_continue;
+    }
+
+    #include "../verbatim/verbatim.c"
+
+    j += 2 + l + 1;
+    json_track (j - q);
+
+    json_break (json_state_comma, 0);
+
+    // Save the verbatim string state
+verb_end:
+#if JSON(EXPLICIT)
+    json_track (j - q);
+
+  #if JSON(STREAM)
+    jsnp->st.verb.len = j - p;
+  #endif
+
+    json_more();
+#endif
+
+    // Unreachable
+    assume_unreachable();
+    break;
+}
+
+// -----------------------------------------------------------------------------
+// Encoded data string
+// -----------------------------------------------------------------------------
+// Scheme
+case uson_state_data_scheme:
+case_uson_state_data_scheme:
+{
+    const u8* p = j;
+
+loop (scheme);
+    if (unlikely (!uson_chr_scheme (c))) goto scheme_done;
+
+    j++;
+
+    if (json_end()) goto scheme_end;
+
+    c = *j;
+
+    repeat (scheme);
+
+    // Save the scheme string
+scheme_done:
+    if (unlikely ((c != '?') && (c != ':'))) json_error (JSON_ERROR_TOKEN);
+
+    json_track (j - p);
+
+    #include "../data/scheme/scheme.c"
+
+#if JSON(STREAM)
+    jsnp->st.data.pos = (size_t)(j - json) + 1u;
+#endif
+
+    // Parse the MIME type
+    if (c == ':')
+    {
+      uson_data_mime_init();
+      json_break (uson_state_data_mime, 1);
+    }
+
+    // Parse the encoded data
+    uson_data_str_init();
+    json_break (uson_state_data, 1);
+
+    // Save the scheme string state
+scheme_end:
+#if JSON(EXPLICIT)
+    json_track (j - p);
+
+  #if JSON(STREAM)
+    jsnp->st.data.len = j - p;
+  #endif
+
+    json_more();
+#endif
+
+    // Unreachable
+    assume_unreachable();
+    break;
+}
+
+// -----------------------------------------------------------------------------
+// MIME type
+case uson_state_data_mime:
+case_uson_state_data_mime:
+{
+    const u8* p = j;
+
+loop (mime);
+    if (unlikely (!uson_chr_mime (c))) goto mime_done;
+
+    j++;
+
+    if (json_end()) goto mime_end;
+
+    c = *j;
+
+    repeat (mime);
+
+    // Save the MIME type string
+mime_done:
+    if (unlikely (c != '?')) json_error (JSON_ERROR_TOKEN);
+
+    json_track (j - p);
+
+    #include "../data/mime/mime.c"
+
+    // Initialize the data string buffer
+    uson_data_str_init();
+
+#if JSON(STREAM)
+    jsnp->st.data.pos = (size_t)(j - json) + 1u;
+#endif
+
+    json_break (uson_state_data, 1);
+
+    // Save the MIME type string state
+mime_end:
+#if JSON(EXPLICIT)
+    json_track (j - p);
+
+  #if JSON(STREAM)
+    jsnp->st.data.len = j - p;
+  #endif
+
+    json_more();
+#endif
+
+    // Unreachable
+    assume_unreachable();
+    break;
+}
+
+// -----------------------------------------------------------------------------
+// Encoded data
+case uson_state_data:
+case_uson_state_data:
+{
+    const u8* p = j;
+    u8* o = (u8*)j;
+
+#if !JSON(EXPLICIT) && !CPU(PAGE_SIZE)
+    // A case when vectorizing decoding is impossible
+loop (data);
+#endif
+
+    if (unlikely (json_wspace (c)))
+    {
+      #define NO_SIMD
+
+#if JSON(EXPLICIT) || CPU(PAGE_SIZE)
+      // Skip remaining whitespace
+data_wspace:
+#endif
+
+      #include "../wspace/wspace.c"
+    }
+
+#if JSON(EXPLICIT) || CPU(PAGE_SIZE)
+    // Vectorized decoding
+  #if !JSON(EXPLICIT)
+    const u8* e;
+
+loop (data);
+    e = ptr_align_ceil (CPU_PAGE_SIZE, j);
+  #endif
+
+    // Include the SIMD processing code path
+    #include "../data/simd.c"
+
+    // Can't use `json_peek()` here
+    while ((size_t)(e - j) >= 4u)
+    {
+      // Decode the vector of 4 characters
+      uint b0 = uson_base64_tbl[j[0]];
+      uint b1 = uson_base64_tbl[j[1]];
+      uint b2 = uson_base64_tbl[j[2]];
+      uint b3 = uson_base64_tbl[j[3]];
+
+      // Check if some character is either a padding character,
+      // a round closing bracket, or if there's an encoding error
+      if (unlikely ((b0 | b1 | b2 | b3) > 63u)) break;
+
+      o[0] = (b0 << 2) | (b1 >> 4);
+      o[1] = (b1 << 4) | (b2 >> 2);
+      o[2] = (b2 << 6) | b3;
+
+      o += 3;
+      j += 4;
+    }
+
+    // Check for input end
+    if (json_end()) goto data_end;
+
+data_skip:
+    // Whitespace can occur in-between 4-byte sequences
+    if (likely (json_wspace (j[0]))) goto data_wspace;
+#endif // JSON(EXPLICIT) || CPU(PAGE_SIZE)
+
+    // Decode the 1st character
+    uint b = uson_base64_tbl[j[0]];
+
+    // Data cannot end on the 1st character
+    if (unlikely (b > 63u))
+    {
+      // Unless the whole string ends with closing bracket
+      if (likely (b == 128u)) goto data_done;
+
+data_error:
+      json_track (j - p);
+      json_error (JSON_ERROR_TOKEN);
+    }
+
+    // Check if the input ends abruptly
+    if (json_broken (4u))
+    {
+      json_seq (4u);
+      goto data_end;
+    }
+
+    // Decode the 2nd character
+    c = b;
+    b = uson_base64_tbl[j[1]];
+
+    // Data cannot end on the 2nd character
+    if (unlikely (b > 63u)) goto data_error;
+
+    // Save the 1st byte
+    o[0] = (c << 2) | (b >> 4);
+
+    // Decode the 3rd character
+    c = b;
+    b = uson_base64_tbl[j[2]];
+
+    // Check for data end on the 3rd character
+    if (unlikely (b > 63u))
+    {
+      // Check if the 3rd character is a padding character
+      if (unlikely (b != 64u)) goto data_error;
+
+      // Check if the 4th character is a padding character
+      if (unlikely (uson_base64_tbl[j[3]] != 64u)) goto data_error;
+
+      o++;
+    }
+
+    // Data doesn't end on the 3rd character
+    else
+    {
+      // Save the 2nd byte
+      o[1] = (c << 4) | (b >> 2);
+
+      // Decode the 4th character
+      c = b;
+      b = uson_base64_tbl[j[3]];
+
+      // Check for data end on the 4th character
+      if (unlikely (b > 63))
+      {
+        // Check if the last character is a padding character
+        if (unlikely (b != 64)) goto data_error;
+
+        o += 2;
+      }
+
+      // Data doesn't end on the 4th character
+      else
+      {
+        // Save the 3rd byte
+        o[2] = (c << 6) | b;
+
+        o += 3;
+      }
+    }
+
+    j += 4;
+
+#if !JSON(EXPLICIT)
+    // Back to vectorized processing
+    repeat (data);
+#endif
+
+    // Save the decoded string
+data_done:
+    j++;
+    json_track (j - p);
+
+    #include "../data/data.c"
+
+    json_break (json_state_comma, 0);
+
+    // Save the decoded string state
+data_end:
+#if JSON(EXPLICIT)
+    json_track (j - p);
+
+  #if JSON(STREAM)
+    jsnp->st.data.len = o - p;
+  #endif
+
+    json_more();
+#endif
+
+    // Unreachable
+    assume_unreachable();
+    break;
+}
+
+// -----------------------------------------------------------------------------
+
+#endif // USON
+
+// -----------------------------------------------------------------------------
 // Root
 case json_state_root:
 case_json_state_root:
-    // Whitespace
+    // Whitespace before the root element
     if (unlikely (json_wspace (c)))
     {
-      #define T_NOSIMD
+      #define NO_SIMD
 
-      #include "wspace/wspace.c"
+      #include "../wspace/wspace.c"
     }
+
+#if ENABLED(USON)
+    // Implicit root object start
+    if (unlikely (uson_flags_config (state)))
+    {
+      #define USON_CONFIG
+
+      #include "../root/start.c"
+      #include "../object/start.c"
+
+      goto root_key;
+    }
+#endif
 
     // Check if the root element isn't an object or an array
     if (unlikely (chr_to_lcase_fast (c) != '{'))
@@ -1343,11 +1967,11 @@ case_json_state_root:
     }
 
     // Set up the root element
-    #include "root/start.c"
+    #include "../root/start.c"
 
     // Parse the root value
     json_state (json_state_value);
-    goto case_json_state_value_root;
+    goto root_value;
 
     // Unreachable
     assume_unreachable();
@@ -1356,24 +1980,24 @@ case_json_state_root:
 
 #if JSON(STREAM)
 stream_end:
-  // Handle the last chunk
+  // Check if this is the last chunk
   if (json_last()) goto value_end;
 
   // Save the parser state and flags
   jsnp->state = state;
-
-  // Indicate that the JSON input is incomplete
   jsnp->err = JSON_ERROR_EXPECTED_MORE;
 
   // Copy the partial value string into the intermediate buffer
-  if (likely (json_state_get() >= json_state_string))
+  if (likely (json_state_get() >= json_state_number))
   {
     json_val_st_t* st = &(jsnp->st.val);
 
   #if JSON(SAX)
     // Chunked string value processing (only for SAX)
     if (unlikely (jsnp->chunked
-    && (json_state_get() == json_state_string)
+    // Must not be a number string
+    && (json_state_get() >= json_state_string)
+    // Must not be a key or be empty
     && !json_flags_key (state) && (st->len != 0)))
     {
       jsax_str_t str;
@@ -1388,36 +2012,63 @@ stream_end:
     {
       u8* buf = jsnp->buf;
 
-      json_buf_grow (buf, st->len);
+      json_buf_grow (&buf, st->len);
       str_copy (buf + jsnp->used, json + st->pos, st->len);
 
       jsnp->used += st->len;
     }
 
+    // Reset the value state
     st->pos = 0;
     st->len = 0;
   }
 
   // Done
-  jsnp->pos = (size_t)(j - json);
+  jsnp->pos = j - json;
   jsnp->need = jsnp->need - (size_t)(e - j);
 
   json_return();
-#endif
+#endif // JSON(STREAM)
 
 #if JSON(EXPLICIT)
 value_end:
-  // Root value end
-  if (likely ((json_state_get() == json_state_comma)
-  && json_flags_root (state))) goto root_end;
+  if (likely (json_state_get() == json_state_comma))
+  {
+    // Root value end
+    if (likely (json_flags_root (state))) goto root_end;
+
+  #if ENABLED(USON)
+    // Configuration end
+    if (likely (uson_flags_config (state)))
+    {
+      if (likely (json_flags_key (state)
+      || uson_flags_coll_end (state))) goto config_end;
+    }
+  #endif
+  }
 
   jsnp->err = JSON_ERROR_EXPECTED_MORE;
-#endif
+#endif // JSON(EXPLICIT)
 
 error:
-  // Invalid input
+  // The input is invalid
   jsnp->state = json_state_error;
-  jsnp->pos = (size_t)(j - json);
+  jsnp->pos = j - json;
+  jsnp->need = 0;
 
   json_return();
+
+#if JSON(SAX)
+pause:
+  // Stopped from callback
+  jsnp->err = JSON_ERROR_CALLBACK;
+  jsnp->pos = j - json;
+  jsnp->need = 0;
+
+  json_return();
+#endif
 }
+
+// -----------------------------------------------------------------------------
+
+#include "undef.h"

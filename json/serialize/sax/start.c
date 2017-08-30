@@ -6,14 +6,6 @@
 // Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
 
-#if T(PRETTY)
-  #define t_jsax_write_delim jsax_pretty_delim
-#else
-  #define t_jsax_write_delim jsax_write_delim
-#endif
-
-// -----------------------------------------------------------------------------
-
 if (true)
 {
   uint* stack = st->stack;
@@ -26,7 +18,9 @@ if (true)
     return 1;
   }
 
-  t_jsax_write_delim (true);
+  #define T_COLL
+
+  #include "delimiter.c"
 
 #if !T(PRETTY)
   if (size == 0)
@@ -64,4 +58,3 @@ if (true)
 
 #undef T_PRETTY
 #undef t_eol
-#undef t_jsax_write_delim

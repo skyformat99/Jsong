@@ -24,11 +24,11 @@
 {                                    \
   size_t sz = jsnp->size + (a_sz);   \
                                      \
-  a_buf = mem_pool_realloc (jsnp->pool, (a_buf), jsnp->size, (sz));\
+  *(a_buf) = mem_pool_realloc (jsnp->pool, *(a_buf), jsnp->size, (sz));\
                                      \
-  if (unlikely ((a_buf) == null)) json_error (JSON_ERROR_MEMORY);\
-                      \
-  jsnp->buf = (a_buf);\
+  if (unlikely (*(a_buf) == null)) json_error (JSON_ERROR_MEMORY);\
+                       \
+  jsnp->buf = *(a_buf);\
   jsnp->size = sz;\
 } while (0)
 

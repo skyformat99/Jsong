@@ -7,12 +7,16 @@
 // -----------------------------------------------------------------------------
 
 #include <quantum/build.h>
+
+// Needs to be included first in order to resolve
+// the `noreturn` keyword conflict with <quantum/core.h>
+#include <stdlib.h>
+
 #include <quantum/core.h>
 
 #include <json/dom.h>
 #include <json/sax.h>
 #include <json/utils.h>
-#include <json/serialize.h>
 
 // -----------------------------------------------------------------------------
 

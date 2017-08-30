@@ -1,7 +1,7 @@
 // =============================================================================
 // <utils/errors.c>
 //
-// JSON error string.
+// JSON error strings.
 //
 // Copyright Kristian Garnét.
 // -----------------------------------------------------------------------------
@@ -17,7 +17,7 @@
 
 // -----------------------------------------------------------------------------
 
-const u8* json_errors[12] =
+const u8* json_errors[13] =
 {
   U8("JSON is OK"),
   U8("Interrupted by callback"),
@@ -26,9 +26,10 @@ const u8* json_errors[12] =
   U8("Illegal string character"),
   U8("Illegal escape sequence character"),
   U8("Illegal Unicode escape sequence character"),
+  U8("Illegal hexadecimal escape sequence character")
   U8("Illegal number character"),
   U8("Unexpected token"),
   U8("Expected object property key"),
   U8("Expected object property value"),
-  U8("Expected more data")
+  U8("Expected more data"),
 };

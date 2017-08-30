@@ -28,7 +28,11 @@ if (true)
       return 1;
     }
 
+  #if ENABLED(USON)
+    *buf++ = ';';
+  #else
     *buf++ = ',';
+  #endif
 
     json_str_copy (buf, t_eol, cstrlen (t_eol));
     buf += cstrlen (t_eol);
@@ -44,7 +48,12 @@ if (true)
       return 1;
     }
 
+  #if ENABLED(USON)
+    *buf++ = ';';
+  #else
     *buf++ = ',';
+  #endif
+
     size--;
 #endif
 
@@ -123,7 +132,7 @@ if (true)
   size--;
 
 partial:
-  ret = json_escape (pos, len, buf, size - 2u, &end, &sz);
+  ret = json_prefix (escape) (pos, len, buf, size - 2u, &end, &sz);
 
   buf += sz;
   size -= sz;

@@ -22,6 +22,7 @@
 
 // -----------------------------------------------------------------------------
 
+#include "api/core.h"
 #include "api/common.h"
 
 // =============================================================================
@@ -51,12 +52,21 @@ typedef enum json_primitive_e
 } json_primitive_t;
 
 // -----------------------------------------------------------------------------
-// String type
+// String kind
 typedef enum json_str_kind_e
 {
   json_str_norm,
   json_str_pack
 } json_str_kind_t;
+
+// -----------------------------------------------------------------------------
+// String type
+typedef enum json_str_type_e
+{
+  json_str_plain = 0 << 1,
+  uson_str_verb = 1 << 1,
+  uson_str_data = 2 << 1
+} json_str_type_t;
 
 // -----------------------------------------------------------------------------
 // Collection type
@@ -183,8 +193,10 @@ typedef union json_value_u
 
   json_str_t* str;
   json_istr_t* istr;
-  json_num_t num;
+  uson_str_verb_t* verb;
+  uson_str_data_t* data;
 
+  json_num_t num;
   double f;
   intmax_t i;
   uintmax_t u;
@@ -245,44 +257,24 @@ struct json_kv_s
 // -----------------------------------------------------------------------------
 // Parser object
 typedef struct json_s aligned(CPU_CACHE_LINE_SIZE) json_t;
+typedef struct uson_s aligned(CPU_CACHE_LINE_SIZE) uson_t;
 
 // -----------------------------------------------------------------------------
-// Serialization object
+// Serialization objects
 // -----------------------------------------------------------------------------
 
-#define json_serialize_common_s\
-  json_node_t root;\
-  json_node_t node;\
-                   \
-  u8* buf;         \
-  size_t fill;     \
-  size_t size;     \
-  size_t need;     \
-                   \
-  u8* pos;         \
-  size_t len;      \
-                   \
-  bool key;        \
-  bool term;       \
-                   \
-  ushort flt_dig;  \
-  ushort big_flt_dig
+typedef struct json_serialize_s aligned(CPU_CACHE_LINE_SIZE) json_serialize_t;
+typedef struct json_format_s aligned(CPU_CACHE_LINE_SIZE) json_format_t;
 
-typedef struct json_serialize_s
-{
-  json_serialize_common_s;
-} json_serialize_t;
-
-typedef struct json_format_s
-{
-  json_serialize_common_s;
-
-  uint indent_size;
-  uint indent_width;
-} json_format_t;
+typedef struct uson_serialize_s aligned(CPU_CACHE_LINE_SIZE) uson_serialize_t;
+typedef struct uson_format_s aligned(CPU_CACHE_LINE_SIZE) uson_format_t;
 
 // -----------------------------------------------------------------------------
 
+#define H_JSON_DOM
+#include "api/shared.h"
+
+#define H_USON_DOM
 #include "api/shared.h"
 
 // =============================================================================
@@ -292,6 +284,10 @@ typedef struct json_format_s
 #define json_node_null (json_node_t){null}
 // DOM root node
 #define json_node_root(elmnt) (json_node_t){elmnt}
+
+// -----------------------------------------------------------------------------
+
+#define json_key_len(key) (json_hash_len ((key)->hash))
 
 // -----------------------------------------------------------------------------
 // Pointer untagging / unboxing / unpacking
@@ -335,6 +331,11 @@ typedef struct json_format_s
 #define json_is_int_any(elmnt) (json_get_type (elmnt) >= json_val_int)
 #define json_is_int(elmnt) (json_get_type (elmnt) == json_val_int)
 #define json_is_uint(elmnt) (json_get_type (elmnt) == json_val_uint)
+
+// -----------------------------------------------------------------------------
+
+#define uson_is_str_verb(elmnt) ((json_get_type (elmnt) == json_val_str) && (((elmnt)->val.tag & json_str_type) == uson_str_verb))
+#define uson_is_str_data(elmnt) ((json_get_type (elmnt) == json_val_str) && (((elmnt)->val.tag & json_str_type) == uson_str_data))
 
 // -----------------------------------------------------------------------------
 // Determine the extended number value type
@@ -397,7 +398,21 @@ static inline json_str_t json_get_str (const void* ptr)
     return str;
   }
 
-  return *(elmnt->val.str);
+  return *json_unbox (json_str_t*, elmnt->val);
+}
+
+// -----------------------------------------------------------------------------
+// USON verbatim string
+static inline uson_str_verb_t* uson_get_str_verb (const void* ptr)
+{
+  return json_unbox (uson_str_verb_t*, json_as_elmnt (ptr)->val);
+}
+
+// -----------------------------------------------------------------------------
+// USON data string
+static inline uson_str_data_t* uson_get_str_data (const void* ptr)
+{
+  return json_unbox (uson_str_data_t*, json_as_elmnt (ptr)->val);
 }
 
 // -----------------------------------------------------------------------------
@@ -447,6 +462,7 @@ static inline json_num_str_t json_get_num_str (const void* ptr)
 // -----------------------------------------------------------------------------
 
 extern mem_pool_t* json_pool_create (void);
+extern void* json_pool_alloc (mem_pool_t* pool, size_t size);
 extern void json_pool_destroy (mem_pool_t* pool);
 
 // -----------------------------------------------------------------------------
@@ -455,8 +471,13 @@ extern void json_pool_destroy (mem_pool_t* pool);
 
 extern void json_init (json_t* jsnp, mem_pool_t* pool);
 extern void json_initi (json_t* jsnp, mem_pool_t* pool);
-
 extern void json_init_stream (json_t* jsnp, mem_pool_t* pool);
+
+// -----------------------------------------------------------------------------
+
+extern void uson_init (uson_t* jsnp, mem_pool_t* pool);
+extern void uson_initi (uson_t* jsnp, mem_pool_t* pool);
+extern void uson_init_stream (uson_t* jsnp, mem_pool_t* pool);
 
 // -----------------------------------------------------------------------------
 // Parsing
@@ -464,8 +485,13 @@ extern void json_init_stream (json_t* jsnp, mem_pool_t* pool);
 
 extern json_node_t json_parse (json_t* jsnp, u8* json, size_t size);
 extern json_node_t json_parsei (json_t* jsnp, u8* json);
-
 extern json_node_t json_parse_stream (json_t* jsnp, u8* json, size_t size, bool last);
+
+// -----------------------------------------------------------------------------
+
+extern json_node_t uson_parse (uson_t* jsnp, u8* json, size_t size);
+extern json_node_t uson_parsei (uson_t* jsnp, u8* json);
+extern json_node_t uson_parse_stream (uson_t* jsnp, u8* json, size_t size, bool last);
 
 // -----------------------------------------------------------------------------
 // Serialization
@@ -481,6 +507,16 @@ extern bool json_serialize (json_serialize_t* st);
 
 // -----------------------------------------------------------------------------
 
+extern void uson_serialize_init (uson_serialize_t* st, json_node_t root
+, u8* buf, size_t size, size_t fill);
+
+extern void uson_serialize_init_buf (uson_serialize_t* st
+, u8* buf, size_t size, size_t fill);
+
+extern bool uson_serialize (uson_serialize_t* st);
+
+// -----------------------------------------------------------------------------
+
 extern void json_format_init (json_format_t* st, json_node_t root
 , u8* buf, size_t size, size_t fill);
 
@@ -488,6 +524,16 @@ extern void json_format_init_buf (json_format_t* st
 , u8* buf, size_t size, size_t fill);
 
 extern bool json_format (json_format_t* st);
+
+// -----------------------------------------------------------------------------
+
+extern void uson_format_init (uson_format_t* st, json_node_t root
+, u8* buf, size_t size, size_t fill);
+
+extern void uson_format_init_buf (uson_format_t* st
+, u8* buf, size_t size, size_t fill);
+
+extern bool uson_format (uson_format_t* st);
 
 // -----------------------------------------------------------------------------
 // DOM tree traversal

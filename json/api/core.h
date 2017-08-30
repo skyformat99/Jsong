@@ -1,5 +1,5 @@
 // =============================================================================
-// <json.h>
+// <core.h>
 //
 // RFC 7159 JSON parser.
 //
@@ -8,10 +8,6 @@
 
 #ifndef H_D226490539444F71BCE58F714CBA6173
 #define H_D226490539444F71BCE58F714CBA6173
-
-// -----------------------------------------------------------------------------
-
-#include "utils/support.h"
 
 // =============================================================================
 // Configuration
@@ -98,8 +94,17 @@
 // while parsing JSON data. Incurs significant performance hit.
 // -----------------------------------------------------------------------------
 
+#define JSON(feat) (defined(JSON_##feat))
+#define USON(feat) (defined(USON_##feat))
+
+// -----------------------------------------------------------------------------
+// Validate the configuration options
+// -----------------------------------------------------------------------------
+
 #if JSON(STREAM)
-  #define JSON_EXPLICIT
+  #ifndef JSON_EXPLICIT
+    #define JSON_EXPLICIT
+  #endif
 #endif
 
 #if JSON(HASH_KEYS) && (INT_BIT < 32)
@@ -114,10 +119,6 @@
   #undef JSON_ERROR_STRING_NUMBERS
   #undef JSON_BIG_NUMBERS
 #endif
-
-// -----------------------------------------------------------------------------
-
-#include "api/api.h"
 
 // -----------------------------------------------------------------------------
 

@@ -23,7 +23,6 @@
 #include <json/utils.h>
 #include <json/utils/misc.h>
 #include <json/utils/consts.h>
-#include <json/serialize.h>
 
 // =============================================================================
 // Constants
@@ -370,7 +369,7 @@ usage:
   }
 
   // Parse the input JSON stream
-  uint cstate = 0;
+  json_comment_t cstate = {0};
 
   size_t size = fread (buf_in, 1u, 3u, stdin);
   size_t off = 0;

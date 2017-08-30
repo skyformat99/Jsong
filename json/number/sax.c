@@ -25,7 +25,7 @@ if (true)
     u8* b = jsnp->buf;
     size_t sz = jsnp->used;
 
-    json_buf_grow (b, len + 1u);
+    json_buf_grow (&b, len + 1u);
     json_str_copy (b + sz, buf, len);
     jsnp->used = 0;
 

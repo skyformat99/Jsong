@@ -17,6 +17,7 @@
 
 // -----------------------------------------------------------------------------
 
+#include "api/core.h"
 #include "api/common.h"
 
 // =============================================================================
@@ -70,40 +71,17 @@ typedef enum jsax_serialize_flags_e
 // -----------------------------------------------------------------------------
 // Parser object
 typedef struct jsax_s aligned(CPU_CACHE_LINE_SIZE) jsax_t;
+typedef struct usax_s aligned(CPU_CACHE_LINE_SIZE) usax_t;
 
 // -----------------------------------------------------------------------------
-// Serialization object
+// Serialization objects
 // -----------------------------------------------------------------------------
 
-#define jsax_serialize_common_s\
-  json_flags_t flags;\
-                   \
-  uint* stack;     \
-  uint depth;      \
-  uint level;      \
-                   \
-  u8* buf;         \
-  size_t size;     \
-  size_t need;     \
-                   \
-  u8* pos;         \
-  size_t len;      \
-                   \
-  ushort flt_dig;  \
-  ushort big_flt_dig
+typedef struct jsax_serialize_s aligned(CPU_CACHE_LINE_SIZE) jsax_serialize_t;
+typedef struct usax_serialize_s aligned(CPU_CACHE_LINE_SIZE) usax_serialize_t;
 
-typedef struct jsax_serialize_s
-{
-  jsax_serialize_common_s;
-} jsax_serialize_t;
-
-typedef struct jsax_format_s
-{
-  jsax_serialize_common_s;
-
-  uint indent_size;
-  uint indent_width;
-} jsax_format_t;
+typedef struct jsax_format_s aligned(CPU_CACHE_LINE_SIZE) jsax_format_t;
+typedef struct usax_format_s aligned(CPU_CACHE_LINE_SIZE) usax_format_t;
 
 // -----------------------------------------------------------------------------
 // Event handler callbacks
@@ -119,10 +97,37 @@ typedef bool (*jsax_mem_fn)  (const jsax_t*, u8**, size_t*, size_t);
 
 // -----------------------------------------------------------------------------
 
+typedef bool (*usax_key_fn)  (usax_t*, jsax_key_t);
+typedef bool (*usax_str_fn)  (usax_t*, jsax_str_t);
+typedef bool (*usax_num_fn)  (usax_t*, jsax_num_t);
+typedef bool (*usax_int_fn)  (usax_t*, intmax_t);
+typedef bool (*usax_uint_fn) (usax_t*, uintmax_t);
+typedef bool (*usax_flt_fn)  (usax_t*, double);
+typedef bool (*usax_bool_fn) (usax_t*, bool);
+typedef bool (*usax_null_fn) (usax_t*);
+typedef bool (*usax_mem_fn)  (const usax_t*, u8**, size_t*, size_t);
+
+// -----------------------------------------------------------------------------
+
+#define H_JSON_SAX
+#include "api/shared.h"
+
+#define H_USON_SAX
 #include "api/shared.h"
 
 // =============================================================================
 // Macros
+// -----------------------------------------------------------------------------
+// Access the SAX parser object embedded in another object
+#define jsax_cast(obj) (jsax_t*)(obj)
+#define usax_cast(obj) (usax_t*)(obj)
+
+// -----------------------------------------------------------------------------
+
+#define jsax_key_len(key) (json_hash_len (key.hash))
+
+// -----------------------------------------------------------------------------
+// Events
 // -----------------------------------------------------------------------------
 
 #define jsax_skip_all(jsnp) do\
@@ -139,6 +144,24 @@ typedef bool (*jsax_mem_fn)  (const jsax_t*, u8**, size_t*, size_t);
   (jsnp)->on_bool  = jsax_bool_skip;\
   (jsnp)->on_null  = jsax_null_skip;\
   (jsnp)->on_end   = jsax_end_skip;\
+} while (0)
+
+#define usax_skip_all(jsnp) do\
+{                             \
+  (jsnp)->chunked = true;     \
+                              \
+  (jsnp)->on_start = usax_start_skip;\
+  (jsnp)->on_key   = usax_key_skip;\
+  (jsnp)->on_str   = usax_str_skip;\
+  (jsnp)->on_num   = usax_num_skip;\
+  (jsnp)->on_int   = usax_int_skip;\
+  (jsnp)->on_uint  = usax_uint_skip;\
+  (jsnp)->on_flt   = usax_flt_skip;\
+  (jsnp)->on_bool  = usax_bool_skip;\
+  (jsnp)->on_null  = usax_null_skip;\
+  (jsnp)->on_end   = usax_end_skip;\
+  (jsnp)->on_id    = usax_id_skip;\
+  (jsnp)->on_mime  = usax_mime_skip;\
 } while (0)
 
 // -----------------------------------------------------------------------------
@@ -184,8 +207,13 @@ typedef bool (*jsax_mem_fn)  (const jsax_t*, u8**, size_t*, size_t);
 
 extern void jsax_init (jsax_t* jsnp, u8* buf, size_t size);
 extern void jsax_initi (jsax_t* jsnp, u8* buf, size_t size);
-
 extern void jsax_init_stream (jsax_t* jsnp, u8* buf, size_t size);
+
+// -----------------------------------------------------------------------------
+
+extern void usax_init (usax_t* jsnp, u8* buf, size_t size);
+extern void usax_initi (usax_t* jsnp, u8* buf, size_t size);
+extern void usax_init_stream (usax_t* jsnp, u8* buf, size_t size);
 
 // -----------------------------------------------------------------------------
 // Parsing
@@ -193,8 +221,13 @@ extern void jsax_init_stream (jsax_t* jsnp, u8* buf, size_t size);
 
 extern bool jsax_parse (jsax_t* jsnp, u8* json, size_t size);
 extern bool jsax_parsei (jsax_t* jsnp, u8* json);
-
 extern bool jsax_parse_stream (jsax_t* jsnp, u8* json, size_t size, bool last);
+
+// -----------------------------------------------------------------------------
+
+extern bool usax_parse (usax_t* jsnp, u8* json, size_t size);
+extern bool usax_parsei (usax_t* jsnp, u8* json);
+extern bool usax_parse_stream (usax_t* jsnp, u8* json, size_t size, bool last);
 
 // -----------------------------------------------------------------------------
 // Serialization
@@ -219,6 +252,27 @@ extern int jsax_write_end (jsax_serialize_t* st);
 
 // -----------------------------------------------------------------------------
 
+extern void usax_serialize_init (usax_serialize_t* st, uint* stack, uint depth
+, u8* buf, size_t size);
+
+extern void usax_serialize_init_stack (usax_serialize_t* st, uint* stack, uint depth);
+extern void usax_serialize_init_buf (usax_serialize_t* st, u8* buf, size_t size);
+
+extern int usax_write_start (usax_serialize_t* st, bool obj);
+extern int usax_write_key (usax_serialize_t* st, jsax_str_t key);
+extern int usax_write_str (usax_serialize_t* st, jsax_str_t str);
+extern int usax_write_num (usax_serialize_t* st, jsax_num_t num);
+extern int usax_write_int (usax_serialize_t* st, intmax_t val);
+extern int usax_write_uint (usax_serialize_t* st, uintmax_t val);
+extern int usax_write_flt (usax_serialize_t* st, double val);
+extern int usax_write_bool (usax_serialize_t* st, bool val);
+extern int usax_write_null (usax_serialize_t* st);
+extern int usax_write_end (usax_serialize_t* st);
+extern int usax_write_verb (usax_serialize_t* st, usax_str_verb_t* val);
+extern int usax_write_data (usax_serialize_t* st, usax_str_data_t* val);
+
+// -----------------------------------------------------------------------------
+
 extern void jsax_format_init (jsax_format_t* st, uint* stack, uint depth
 , u8* buf, size_t size);
 
@@ -237,6 +291,27 @@ extern int jsax_pretty_null (jsax_format_t* st);
 extern int jsax_pretty_end (jsax_format_t* st);
 
 // -----------------------------------------------------------------------------
+
+extern void usax_format_init (usax_format_t* st, uint* stack, uint depth
+, u8* buf, size_t size);
+
+extern void usax_format_init_stack (usax_format_t* st, uint* stack, uint depth);
+extern void usax_format_init_buf (usax_format_t* st, u8* buf, size_t size);
+
+extern int usax_pretty_start (usax_format_t* st, bool obj);
+extern int usax_pretty_key (usax_format_t* st, jsax_str_t key);
+extern int usax_pretty_str (usax_format_t* st, jsax_str_t str);
+extern int usax_pretty_num (usax_format_t* st, jsax_num_t num);
+extern int usax_pretty_int (usax_format_t* st, intmax_t val);
+extern int usax_pretty_uint (usax_format_t* st, uintmax_t val);
+extern int usax_pretty_flt (usax_format_t* st, double val);
+extern int usax_pretty_bool (usax_format_t* st, bool val);
+extern int usax_pretty_null (usax_format_t* st);
+extern int usax_pretty_end (usax_format_t* st);
+extern int usax_pretty_verb (usax_format_t* st, usax_str_verb_t* val);
+extern int usax_pretty_data (usax_format_t* st, usax_str_data_t* val);
+
+// -----------------------------------------------------------------------------
 // Predefined callbacks
 // -----------------------------------------------------------------------------
 // Trap callbacks: stop parsing immediately
@@ -253,6 +328,22 @@ extern bool jsax_end_trap (jsax_t* jsnp);
 extern bool jsax_mem_trap (const jsax_t* jsnp, u8** buf, size_t* size, size_t need);
 
 // -----------------------------------------------------------------------------
+
+extern bool usax_start_trap (usax_t* jsnp, bool obj);
+extern bool usax_key_trap (usax_t* jsnp, jsax_key_t key);
+extern bool usax_str_trap (usax_t* jsnp, jsax_str_t str);
+extern bool usax_num_trap (usax_t* jsnp, jsax_num_t num);
+extern bool usax_int_trap (usax_t* jsnp, intmax_t val);
+extern bool usax_uint_trap (usax_t* jsnp, uintmax_t val);
+extern bool usax_flt_trap (usax_t* jsnp, double val);
+extern bool usax_bool_trap (usax_t* jsnp, bool val);
+extern bool usax_null_trap (usax_t* jsnp);
+extern bool usax_end_trap (usax_t* jsnp);
+extern bool usax_id_trap (usax_t* jsnp, jsax_str_t str);
+extern bool usax_mime_trap (usax_t* jsnp, jsax_str_t str);
+extern bool usax_mem_trap (const usax_t* jsnp, u8** buf, size_t* size, size_t need);
+
+// -----------------------------------------------------------------------------
 // Skip callbacks: skip the item and continue parsing
 extern bool jsax_start_skip (jsax_t* jsnp, bool obj);
 extern bool jsax_key_skip (jsax_t* jsnp, jsax_key_t key);
@@ -264,6 +355,21 @@ extern bool jsax_flt_skip (jsax_t* jsnp, double val);
 extern bool jsax_bool_skip (jsax_t* jsnp, bool val);
 extern bool jsax_null_skip (jsax_t* jsnp);
 extern bool jsax_end_skip (jsax_t* jsnp);
+
+// -----------------------------------------------------------------------------
+
+extern bool usax_start_skip (usax_t* jsnp, bool obj);
+extern bool usax_key_skip (usax_t* jsnp, jsax_key_t key);
+extern bool usax_str_skip (usax_t* jsnp, jsax_str_t str);
+extern bool usax_num_skip (usax_t* jsnp, jsax_num_t num);
+extern bool usax_int_skip (usax_t* jsnp, intmax_t val);
+extern bool usax_uint_skip (usax_t* jsnp, uintmax_t val);
+extern bool usax_flt_skip (usax_t* jsnp, double val);
+extern bool usax_bool_skip (usax_t* jsnp, bool val);
+extern bool usax_null_skip (usax_t* jsnp);
+extern bool usax_end_skip (usax_t* jsnp);
+extern bool usax_id_skip (usax_t* jsnp, jsax_str_t str);
+extern bool usax_mime_skip (usax_t* jsnp, jsax_str_t str);
 
 // -----------------------------------------------------------------------------
 // Extended number

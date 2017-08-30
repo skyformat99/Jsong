@@ -9,7 +9,7 @@
 if (true)
 {
   const xi128 cq = _mm_set1_epi8 ('"');
-  const xi128 cs = _mm_set1_epi8 ('/');
+  const xi128 cs = _mm_set1_epi8 ('\\');
 
 #if !JSON(UNCOMMENT_EXPLICIT)
   const xi128 cz = _mm_setzero_si128();
