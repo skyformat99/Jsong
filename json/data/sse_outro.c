@@ -15,7 +15,7 @@
 #if CPU(SSE42)
   register uint n = b >> 2;
 #else
-  register uint n = (__builtin_ffs (m) - 1) >> 2;
+  register uint n = bsf32 (m) >> 2;
 #endif
 
   xi128_t v = {.x = dr};
